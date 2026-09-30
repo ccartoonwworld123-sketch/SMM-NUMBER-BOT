@@ -4,7 +4,7 @@ import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# Telegram Bot Token (Environment Variable system)
+# Telegram Bot Token (Render Environment Variable system)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 def get_3_numbers():
