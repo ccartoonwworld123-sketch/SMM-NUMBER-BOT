@@ -22,7 +22,7 @@ import random
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 
-BOT_TOKEN = '8752686767:AAEuSDHJ3DHN-am6WpAWHWcB72pomEEVPzY'
+BOT_TOKEN = '8752686767:AAG8rwokonZyOQuK51yEeXoCWImPoEDVAiI'
 
 # আইভরি কোস্ট (+225) নম্বরসমূহ
 NUMBERS_POOL = [
