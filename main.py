@@ -28,6 +28,8 @@ def get_country_info(phone_number):
     elif clean_num.startswith("996"): return "Kyrgyzstan", "KG", "🇰🇬"
     elif clean_num.startswith("43"): return "Austria", "AT", "🇦🇹"
     elif clean_num.startswith("39"): return "Italy", "IT", "🇮🇹"
+    elif clean_num.startswith("201") or clean_num.startswith("20"): return "Egypt", "EG", "🇪🇬"
+    elif clean_num.startswith("232"): return "Sierra Leone", "SL", "🇸🇱"
     elif clean_num.startswith("880"): return "Bangladesh", "BD", "🇧🇩"
     elif clean_num.startswith("91"): return "India", "IN", "🇮🇳"
     else: return "International", "INT", "🌍"
@@ -171,7 +173,7 @@ async def poll_for_otp(chat_id, order_id, phone, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️ Set Range"],
+        ["📞 Get API Number", "⚙️️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
