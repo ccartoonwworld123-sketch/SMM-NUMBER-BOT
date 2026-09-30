@@ -83,7 +83,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🎪 Leaderboard":
         await update.message.reply_text("🎪 Leaderboard: No data yet.")
 
-    elif text == "🔒 Support":elif text == "🔓 Support":elif text == "🔓 Support":
+    elif text == "🔒 Support":elif text == "🔓 Support":
     await update.message.reply_text("সাপোর্টের জন্য যোগাযোগ করুন: https://t.me/smmsaport")
 
         await update.message.reply_text("🔒 Support: Contact Admin.")
