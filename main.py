@@ -14,21 +14,20 @@ USER_STATES = {}
 USER_RANGES = {}
 
 LIVE_RANGES = [
-    ("23762XXX", 37),
-    ("237622XXX", 25),
-    ("237620XXX", 13),
-    ("225072XXX", 10),
-    ("22896XXX", 7),
-    ("2290163XXX", 6),
-    ("26661XXX", 6),
-    ("22897XXX", 4),
-    ("25567XXX", 4),
-    ("22890XXX", 3),
+    ("23762", 37),
+    ("237622", 25),
+    ("237620", 13),
+    ("225072", 10),
+    ("22896", 7),
+    ("2290163", 6),
+    ("26661", 6),
+    ("22897", 4),
+    ("25567", 4),
+    ("22890", 3),
 ]
 
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
-    
     if clean_num.startswith("237"):
         return "🇨🇲 CAMEROON (CM)", "cm"
     elif clean_num.startswith("225"):
@@ -44,38 +43,44 @@ def get_country_info(phone_number):
     else:
         return "🇨🇮 IVORY COAST (CI)", "ci"
 
-def get_voltx_real_number(service="fb", country="tg"):
+def get_voltx_real_number(target_range="22896"):
     headers = {
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
     
-    # Correct endpoints based on the panel's documentation structure
-    endpoints = [
-        f"{BASE_API_URL}/gotnum?service={service}&country={country}",
-        f"{BASE_API_URL}/getNumber?service={service}&country={country}",
-        f"{BASE_API_URL}/buy?service={service}&country={country}"
-    ]
+    clean_rid = str(target_range).lower().replace("x", "").strip()
     
-    for url in endpoints:
-        try:
-            # Trying both GET and POST requests to ensure compatibility
-            res = requests.get(url, headers=headers, timeout=8)
-            if res.status_code != 200:
-                res = requests.post(url, headers=headers, json={"service": service, "country": country}, timeout=8)
-                
-            print(f"URL: {url} | Status: {res.status_code} | Text: {res.text}")
-            
-            if res.status_code == 200:
-                data = res.json()
-                phone = data.get("number") or data.get("phone") or data.get("phoneNumber") or data.get("tel")
-                order_id = data.get("id") or data.get("order_id") or data.get("orderId")
+    # First, try calling liveaccess to find the correct active numeric ID if available
+    try:
+        live_res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=5)
+        if live_res.status_code == 200:
+            live_data = live_res.json()
+            # If the panel returns a list or dict of active ranges, we can match it
+            print(f"Live Access: {live_data}")
+    except Exception:
+        pass
+
+    # Request to getnum using the target rid
+    payload = {
+        "rid": clean_rid
+    }
+    
+    try:
+        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=8)
+        print(f"GetNum URL: {BASE_API_URL}/getnum | Payload: {payload} | Status: {res.status_code} | Text: {res.text}")
+        if res.status_code == 200:
+            res_data = res.json()
+            meta = res_data.get("meta", {})
+            if meta.get("code") == 200:
+                data = res_data.get("data", {})
+                phone = data.get("full_number") or data.get("national_number")
+                order_id = res_data.get("rid") or clean_rid
                 if phone:
                     return str(phone), order_id
-        except Exception as e:
-            print(f"Error for {url}: {e}")
-            continue
+    except Exception as e:
+        print(f"API Error: {e}")
 
     return None, None
 
@@ -139,21 +144,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             USER_RANGES[user_id] = clean_text
             await update.message.reply_text(f"🔴 Target range updated to: `{clean_text}`", parse_mode="Markdown")
         else:
-            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896XXX or 23762XXX).")
+            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896 or 23762).")
         return
 
     if text == "📞 Get API Number":
         await update.message.reply_text("⏳ Requesting real numbers from Voltx Panel...")
         
         user_range = USER_RANGES.get(user_id, "22896")
-        clean_prefix = user_range.lower().replace("x", "")
-        country_display, country_code = get_country_info(clean_prefix)
         
         numbers = []
         orders = []
 
         for _ in range(3):
-            p, oid = get_voltx_real_number(service="fb", country=country_code)
+            p, oid = get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
                 if oid:
@@ -161,7 +164,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.3)
 
         if not numbers:
-            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel currently has no stock for range `{user_range}` or API connection needs check.", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Try selecting a prefix from **🟢 Live Traffic**.", parse_mode="Markdown")
             return
 
         num_text = "\n".join([f"📱 `{p}`" for p in numbers])
@@ -176,7 +179,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "⚙️ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
-        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896XXX or 23762XXX):")
+        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896 or 23762):")
 
     elif text == "🟢 Live Traffic":
         traffic_lines = ["📊 **AVAILABLE RANGE TRAFFIC LIST**\n"]
@@ -204,16 +207,13 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "change_number":
         user_id = query.from_user.id
-        
         user_range = USER_RANGES.get(user_id, "22896")
-        clean_prefix = user_range.lower().replace("x", "")
-        country_display, country_code = get_country_info(clean_prefix)
         
         numbers = []
         orders = []
 
         for _ in range(3):
-            p, oid = get_voltx_real_number(service="fb", country=country_code)
+            p, oid = get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
                 if oid:
