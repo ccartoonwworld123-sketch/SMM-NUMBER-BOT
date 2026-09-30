@@ -146,7 +146,6 @@ def check_voltx_otp(order_id):
 def create_number_markup(numbers_list):
     keyboard = []
     for num in numbers_list:
-        # হুবহু ওই বটটার মতো ক্লিপবোর্ড আইকনসহ বাটন ডিজাইন
         keyboard.append([InlineKeyboardButton(f"📋 {num}", callback_data=f"copy_{num}")])
     
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
@@ -255,10 +254,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     
-    # এই অংশটি লোডিং অ্যানিমেশন ইনস্ট্যান্ট বন্ধ করে পপ-আপ অ্যালার্ট দেখাবে
     if query.data.startswith("copy_"):
         phone_num = query.data.replace("copy_", "")
-        await query.answer(f"✔ Number Copied: {phone_num}", show_alert=False)
+        await query.answer()
+        await context.bot.send_message(
+            chat_id=query.message.chat_id, 
+            text=f"`{phone_num}`", 
+            parse_mode="Markdown"
+        )
         return
 
     await query.answer()
