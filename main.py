@@ -1,4 +1,5 @@
 import os
+import random
 import asyncio
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
@@ -25,61 +26,40 @@ LIVE_RANGES = [
     ("22890XXX", 3),
 ]
 
-def get_voltx_number(service="fb", country="ci"):
-    """
-    VoltxSMS REST API request using Authorization Header
-    """
-    headers = {
-        "Authorization": f"Bearer {VOLTX_API_KEY}",
-        "Accept": "application/json"
-    }
+def get_country_info(phone_number):
+    clean_num = phone_number.replace("+", "").strip()
     
-    # Try Correct Voltx Endpoint
-    urls = [
-        "https://voltxsms.com/api/v1/getNumber",
-        "https://voltxsms.com/api/getNumber",
-        "https://voltxsms.com/api/buy"
-    ]
+    if clean_num.startswith("237"):
+        return "🇨🇲 CAMEROON (CM)", "cm"
+    elif clean_num.startswith("225"):
+        return "🇨🇮 IVORY COAST (CI)", "ci"
+    elif clean_num.startswith("228"):
+        return "🇹🇬 TOGO (TG)", "tg"
+    elif clean_num.startswith("229"):
+        return "🇧🇯 BENIN (BJ)", "bj"
+    elif clean_num.startswith("255"):
+        return "🇹🇿 TANZANIA (TZ)", "tz"
+    elif clean_num.startswith("266"):
+        return "🇱🇸 LESOTHO (LS)", "ls"
+    else:
+        return "🇨🇮 IVORY COAST (CI)", "ci"
+
+def generate_numbers_list(clean_prefix, count=3):
+    numbers = []
+    for _ in range(count):
+        random_suffix = "".join([str(random.randint(0, 9)) for _ in range(5)])
+        numbers.append(f"+{clean_prefix}{random_suffix}")
+    return numbers
+
+def create_multi_number_markup(numbers_list):
+    keyboard = []
+    for num in numbers_list:
+        keyboard.append([InlineKeyboardButton(f"👤 📋 {num}", callback_data=f"num_{num}")])
     
-    params = {"service": service, "country": country}
+    keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
+    keyboard.append([InlineKeyboardButton("🌐 Change Country", callback_data="change_country")])
+    keyboard.append([InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")])
     
-    for url in urls:
-        try:
-            res = requests.get(url, headers=headers, params=params, timeout=10)
-            if res.status_code == 200:
-                data = res.json()
-                phone = data.get("number") or data.get("phone")
-                order_id = data.get("id") or data.get("order_id")
-                if phone:
-                    return phone, order_id, "SUCCESS"
-        except Exception:
-            continue
-
-    return None, None, "API_ENDPOINT_ERROR"
-
-def check_voltx_otp(order_id):
-    headers = {
-        "Authorization": f"Bearer {VOLTX_API_KEY}",
-        "Accept": "application/json"
-    }
-    try:
-        url = f"https://voltxsms.com/api/v1/getOtp?id={order_id}"
-        res = requests.get(url, headers=headers, timeout=10)
-        if res.status_code == 200:
-            data = res.json()
-            if data.get("sms") or data.get("code"):
-                return data.get("sms") or data.get("code")
-    except Exception as e:
-        print(f"OTP Check Error: {e}")
-    return None
-
-def create_number_markup(num):
-    keyboard = [
-        [InlineKeyboardButton(f"👤 📋 {num}", callback_data=f"num_{num}")],
-        [InlineKeyboardButton("🔄 Change Number", callback_data="change_number")],
-        [InlineKeyboardButton("🌐 Change Country", callback_data="change_country")],
-        [InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
-    ]
     return InlineKeyboardMarkup(keyboard)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -90,16 +70,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     await update.message.reply_text("Welcome to FB MASTER NUMBER bot! 🤖\nPlease select an option from the menu below:", reply_markup=markup)
-
-async def poll_for_otp(chat_id, order_id, phone, context):
-    for _ in range(24):
-        await asyncio.sleep(5)
-        status = check_voltx_otp(order_id)
-        if status and status != "WAITING":
-            otp_message = f"✅ **Facebook OTP Received!**\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
-            await context.bot.send_message(chat_id=chat_id, text=otp_message, parse_mode="Markdown")
-            return
-    await context.bot.send_message(chat_id=chat_id, text=f"⚠️ Timeout! No OTP received for `{phone}`.", parse_mode="Markdown")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -115,21 +85,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == "📞 Get API Number":
-        await update.message.reply_text("⏳ Requesting number from Voltx Panel...")
-        phone, order_id, status_msg = get_voltx_number(service="fb", country="ci")
+        await update.message.reply_text("⏳ Requesting numbers...")
         
         user_range = USER_RANGES.get(user_id, "23762")
         clean_prefix = user_range.lower().replace("x", "")
         
-        if not phone:
-            phone = f"+{clean_prefix}40912"
-            
-        header_text = f"❓ Service: 📘 Facebook\n🇨🇮 Country: IVORY COAST (CI)\n📱 Number: `{phone}`\n\n⏳ Waiting for OTP..."
-        reply_markup = create_number_markup(phone)
-        await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
+        country_display, _ = get_country_info(clean_prefix)
+        numbers = generate_numbers_list(clean_prefix, 3)
         
-        if order_id:
-            asyncio.create_task(poll_for_otp(update.effective_chat.id, order_id, phone, context))
+        num_text = "\n".join([f"📱 `{num}`" for num in numbers])
+        
+        header_text = f"❓ Service: 📘 Facebook\n{country_display}\n\n{num_text}\n\n⏳ Waiting for OTP..."
+        reply_markup = create_multi_number_markup(numbers)
+        await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
 
     elif text == "⚙️ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
@@ -138,7 +106,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "🟢 Live Traffic":
         traffic_lines = ["📊 **AVAILABLE RANGE TRAFFIC LIST**\n"]
         for r_code, count in LIVE_RANGES:
-            traffic_lines.append(f"🌐 `{r_code}` - FB - **{count}**")
+            country_display, _ = get_country_info(r_code)
+            traffic_lines.append(f"🌐 `{r_code}` - FB - **{count}** | {country_display}")
         
         traffic_lines.append("\n⚡ Select a range and use **⚙️ Set Range** to target it!")
         await update.message.reply_text("\n".join(traffic_lines), parse_mode="Markdown")
@@ -160,20 +129,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "change_number":
         user_id = query.from_user.id
-        phone, order_id, status_msg = get_voltx_number(service="fb", country="ci")
         
         user_range = USER_RANGES.get(user_id, "23762")
         clean_prefix = user_range.lower().replace("x", "")
         
-        if not phone:
-            phone = f"+{clean_prefix}88190"
+        country_display, _ = get_country_info(clean_prefix)
+        numbers = generate_numbers_list(clean_prefix, 3)
 
-        header_text = f"❓ Service: 📘 Facebook\n🇨🇮 Country: IVORY COAST (CI)\n📱 Number: `{phone}`\n\n⏳ Waiting for OTP..."
-        reply_markup = create_number_markup(phone)
+        num_text = "\n".join([f"📱 `{num}`" for num in numbers])
+
+        header_text = f"❓ Service: 📘 Facebook\n{country_display}\n\n{num_text}\n\n⏳ Waiting for OTP..."
+        reply_markup = create_multi_number_markup(numbers)
         await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
-
-        if order_id:
-            asyncio.create_task(poll_for_otp(query.message.chat_id, order_id, phone, context))
 
     elif query.data == "change_country":
         await query.answer("Country list will be updated soon!", show_alert=True)
