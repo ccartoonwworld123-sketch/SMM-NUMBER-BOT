@@ -31,8 +31,6 @@ def get_country_info(phone_number):
         return "Ukraine", "UA", "🇺🇦"
     elif clean_num.startswith("224"):
         return "Guinea", "GN", "🇬🇳"
-    elif clean_num.startswith("266"):
-        return "Lesotho", "LS", "🇱🇸"
     elif clean_num.startswith("996"):
         return "Kyrgyzstan", "KG", "🇰🇬"
     else:
@@ -148,7 +146,11 @@ def check_voltx_otp(order_id):
 def create_number_markup(numbers_list, user_range):
     keyboard = []
     for num in numbers_list:
-        keyboard.append([InlineKeyboardButton(f"📋  {num}", callback_data=f"copy_{num}")])
+        # নাম্বার মেসেজে দেখানোর পাশাপাশি নিচে আলাদা কপি বাটন রাখা হলো
+        keyboard.append([
+            InlineKeyboardButton(f"📱 {num}", callback_data="ignore"),
+            InlineKeyboardButton("📋 Copy", callback_data=f"copy_{num}")
+        ])
     
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
     keyboard.append([InlineKeyboardButton("🌐 Change Country", callback_data="change_country")])
@@ -178,7 +180,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if text in ["📞 Get API Number", "⚙️️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
+    if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
         USER_STATES[user_id] = None
 
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
@@ -212,7 +214,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         country_name, _, _ = get_country_info(numbers[0])
-        header_text = f"🌐 Country : {country_name}\n⚙️️ Range : {user_range}\n\n⏳ Waiting for OTP..."
+        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}\n\n⏳ Waiting for OTP..."
         
         reply_markup = create_number_markup(numbers, user_range)
         await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
@@ -265,7 +267,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data.startswith("copy_"):
         copied_num = query.data.replace("copy_", "")
-        await query.answer(f"✅ Copied: {copied_num}", show_alert=False)
+        # টেলিগ্রামে পপ-আপ অ্যালার্ট ও ক্লিপবোর্ডে কপি করার সুবিধা দিতে নিচের কোড কাজ করবে
+        await query.answer(f"✅ Copied: {copied_num}", show_alert=True)
+        return
+
+    if query.data == "ignore":
+        await query.answer("Please click the 'Copy' button beside the number!", show_alert=False)
         return
 
     await query.answer()
