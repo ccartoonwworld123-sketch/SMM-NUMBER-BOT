@@ -125,7 +125,6 @@ def check_voltx_otp(target_phone, order_id):
     
     clean_target = str(target_phone).replace("+", "").strip()
     
-    # ১. প্রথমে রিয়েল-টাইম কনসোল (`/console`) থেকে চেক করবে যাতে ইনস্ট্যান্ট পাওয়া যায়
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
@@ -145,7 +144,6 @@ def check_voltx_otp(target_phone, order_id):
     except Exception:
         pass
 
-    # ২. এরপর সাকসেস ওটিপি (`/success-otp`) থেকে চেক করবে
     try:
         res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
         if res.status_code == 200:
@@ -189,9 +187,9 @@ def create_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
-    # ইন্টারভাল কমিয়ে ২ সেকেন্ড করা হয়েছে যাতে খুব দ্রুত ক্যাচ করতে পারে
-    for _ in range(90): 
-        await asyncio.sleep(2)
+    # প্রতি ১ সেকেন্ড পরপর চেক করবে যাতে কোড আসার সাথে সাথেই নোটিফিকেশন চলে আসে
+    for _ in range(120): 
+        await asyncio.sleep(1)
         status = check_voltx_otp(phone, order_id)
         if status:
             otp_message = f"🚨 **NEW OTP RECEIVED!** 🚨\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
