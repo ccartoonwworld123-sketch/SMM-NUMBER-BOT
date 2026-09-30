@@ -1,6 +1,7 @@
 import os
 import asyncio
 import requests
+import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, CopyTextButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
@@ -15,28 +16,17 @@ USER_RANGES = {}
 
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
-    if clean_num.startswith("237"):
-        return "Cameroon", "CM", "🇨🇲"
-    elif clean_num.startswith("225"):
-        return "Ivory Coast", "CI", "🇨🇮"
-    elif clean_num.startswith("228"):
-        return "Togo", "TG", "🇹🇬"
-    elif clean_num.startswith("229"):
-        return "Benin", "BJ", "🇧🇯"
-    elif clean_num.startswith("255"):
-        return "Tanzania", "TZ", "🇹🇿"
-    elif clean_num.startswith("266"):
-        return "Lesotho", "LS", "🇱🇸"
-    elif clean_num.startswith("380"):
-        return "Ukraine", "UA", "🇺🇦"
-    elif clean_num.startswith("224"):
-        return "Guinea", "GN", "🇬🇳"
-    elif clean_num.startswith("996"):
-        return "Kyrgyzstan", "KG", "🇰🇬"
-    elif clean_num.startswith("43"):
-        return "Austria", "AT", "🇦🇹"
-    else:
-        return "Togo", "TG", "🇹🇬"
+    if clean_num.startswith("237"): return "Cameroon", "CM", "🇨🇲"
+    elif clean_num.startswith("225"): return "Ivory Coast", "CI", "🇨🇮"
+    elif clean_num.startswith("228"): return "Togo", "TG", "🇹🇬"
+    elif clean_num.startswith("229"): return "Benin", "BJ", "🇧🇯"
+    elif clean_num.startswith("255"): return "Tanzania", "TZ", "🇹🇿"
+    elif clean_num.startswith("266"): return "Lesotho", "LS", "🇱🇸"
+    elif clean_num.startswith("380"): return "Ukraine", "UA", "🇺🇦"
+    elif clean_num.startswith("224"): return "Guinea", "GN", "🇬🇳"
+    elif clean_num.startswith("996"): return "Kyrgyzstan", "KG", "🇰🇬"
+    elif clean_num.startswith("43"): return "Austria", "AT", "🇦🇹"
+    else: return "Togo", "TG", "🇹🇬"
 
 def _sync_get_voltx_real_number(target_range):
     headers = {
@@ -50,11 +40,10 @@ def _sync_get_voltx_real_number(target_range):
         res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=3)
         if res.status_code == 200:
             res_data = res.json()
-            meta = res_data.get("meta", {})
-            if meta.get("code") == 200:
+            if res_data.get("meta", {}).get("code") == 200:
                 data = res_data.get("data", {})
-                phone = data.get("full_number") or data.get("national_number")
-                order_id = res_data.get("id") or data.get("id") or res_data.get("rid") or clean_rid
+                phone = data.get("full_number") or data.get("national_number") or data.get("phone")
+                order_id = res_data.get("id") or data.get("rid") or clean_rid
                 if phone:
                     return str(phone), str(order_id)
     except Exception as e:
@@ -65,54 +54,25 @@ async def get_voltx_real_number(target_range="22896"):
     return await asyncio.to_thread(_sync_get_voltx_real_number, target_range)
 
 def _sync_fetch_live_traffic():
-    headers = {
-        "mauthapi": VOLTX_API_KEY,
-        "Accept": "application/json"
-    }
+    headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
     range_counts = {}
     total_hits = 0
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
         if res.status_code == 200:
-            res_data = res.json()
-            if res_data.get("meta", {}).get("code") == 200:
-                hits = res_data.get("data", {}).get("hits", [])
-                total_hits = len(hits)
-                for hit in hits:
-                    r = hit.get("range")
-                    sid = hit.get("sid", "FACEBOOK")
-                    if sid.upper() == "FB":
-                        sid = "FACEBOOK"
-                    if r:
-                        clean_r = str(r).strip()
-                        if clean_r in range_counts:
-                            range_counts[clean_r]["count"] += 1
-                        else:
-                            range_counts[clean_r] = {"sid": sid.upper(), "count": 1}
-    except Exception as e:
-        print(f"Console API Error: {e}")
-
-    if not range_counts:
-        try:
-            res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=3)
-            if res.status_code == 200:
-                res_data = res.json()
-                if res_data.get("meta", {}).get("code") == 200:
-                    services = res_data.get("data", {}).get("services", [])
-                    for s in services:
-                        sid = s.get("id", "FACEBOOK")
-                        if sid.upper() == "FB":
-                            sid = "FACEBOOK"
-                        for r in s.get("ranges", []):
-                            clean_r = str(r).strip()
-                            if clean_r in range_counts:
-                                range_counts[clean_r]["count"] += 1
-                            else:
-                                range_counts[clean_r] = {"sid": sid.upper(), "count": 1}
-                    total_hits = sum(item["count"] for item in range_counts.values())
-        except Exception as e:
-            print(f"Liveaccess API Error: {e}")
-
+            hits = res.json().get("data", {}).get("hits", [])
+            total_hits = len(hits)
+            for hit in hits:
+                r = hit.get("range")
+                sid = hit.get("sid", "FACEBOOK")
+                if r:
+                    clean_r = str(r).strip()
+                    if clean_r in range_counts:
+                        range_counts[clean_r]["count"] += 1
+                    else:
+                        range_counts[clean_r] = {"sid": sid.upper(), "count": 1}
+    except Exception:
+        pass
     sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1]["count"], reverse=True)
     return sorted_ranges, total_hits
 
@@ -120,53 +80,48 @@ async def fetch_live_traffic_from_panel():
     return await asyncio.to_thread(_sync_fetch_live_traffic)
 
 def _sync_check_voltx_otp(target_phone, order_id):
-    headers = {
-        "mauthapi": VOLTX_API_KEY,
-        "Accept": "application/json"
-    }
-    clean_target = str(target_phone).replace("+", "").strip()
+    headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
     
-    # প্রথমে /console চেক করবে (অন্য ডিভাইস বা প্যানেলের হিটগুলো ধরার জন্য)
+    # নাম্বারের ভেতরের সব অক্ষর বাদ দিয়ে শুধু সংখ্যা বের করা হচ্ছে
+    clean_target = ''.join(filter(str.isdigit, str(target_phone)))
+    # ১০০% ম্যাচিং এর জন্য নাম্বারের শেষের ৬ ডিজিট নেওয়া হচ্ছে
+    short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
+    
+    # ১. কনসোল চেক (অন্য ডিভাইস বা প্যানেল থেকে কোড আসলেও ধরবে)
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
-            res_data = res.json()
-            if res_data.get("meta", {}).get("code") == 200:
-                hits = res_data.get("data", {}).get("hits", [])
-                for hit in hits:
-                    num = str(hit.get("number", "")).replace("+", "").strip()
-                    msg = str(hit.get("message", ""))
-                    if clean_target in num or clean_target in msg:
-                        import re
-                        match = re.search(r'\b\d{4,6}\b', msg)
-                        if match:
-                            return match.group(0)
-                        elif msg:
-                            return msg
+            hits = res.json().get("data", {}).get("hits", [])
+            for hit in hits:
+                if not isinstance(hit, dict): continue
+                num_raw = str(hit.get("number", "") or hit.get("phone", "") or "")
+                msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", ""))
+                clean_num = ''.join(filter(str.isdigit, num_raw))
+                
+                if short_target in clean_num or short_target in msg:
+                    match = re.search(r'\b\d{4,8}\b', msg)
+                    return match.group(0) if match else msg
     except Exception:
         pass
 
-    # এরপর /success-otp চেক করবে
+    # ২. সাকসেস-ওটিপি চেক
     try:
         res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
         if res.status_code == 200:
-            res_data = res.json()
-            if res_data.get("meta", {}).get("code") == 200:
-                otps = res_data.get("data", {}).get("otps", [])
-                for item in otps:
-                    num = str(item.get("number", "")).replace("+", "").strip()
-                    oid = str(item.get("otp_id", ""))
-                    msg = str(item.get("message", ""))
-                    
-                    if clean_target in num or (order_id and order_id in oid) or clean_target in msg:
-                        import re
-                        match = re.search(r'\b\d{4,6}\b', msg)
-                        if match:
-                            return match.group(0)
-                        elif msg:
-                            return msg
+            otps = res.json().get("data", {}).get("otps", [])
+            for item in otps:
+                if not isinstance(item, dict): continue
+                num_raw = str(item.get("number", "") or item.get("phone", "") or "")
+                oid = str(item.get("otp_id", "") or item.get("id", ""))
+                msg = str(item.get("message", "") or item.get("sms", "") or item.get("text", ""))
+                clean_num = ''.join(filter(str.isdigit, num_raw))
+                
+                if short_target in clean_num or short_target in msg or (order_id and str(order_id) == oid):
+                    match = re.search(r'\b\d{4,8}\b', msg)
+                    return match.group(0) if match else msg
     except Exception:
         pass
+        
     return None
 
 async def check_voltx_otp(target_phone, order_id):
@@ -176,13 +131,7 @@ def create_number_markup(numbers_list):
     keyboard = []
     for num in numbers_list:
         _, _, flag = get_country_info(num)
-        button_text = f"{flag} {num}"
-        keyboard.append([
-            InlineKeyboardButton(
-                text=button_text,
-                copy_text=CopyTextButton(text=num)
-            )
-        ])
+        keyboard.append([InlineKeyboardButton(text=f"{flag} {num}", copy_text=CopyTextButton(text=num))])
     
     keyboard.append([
         InlineKeyboardButton("🔔 OTP GROUP", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}"),
@@ -192,21 +141,22 @@ def create_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
-    for _ in range(120): 
+    # ৫ মিনিট পর্যন্ত প্রতি ১ সেকেন্ড পর পর চেক করবে!
+    for _ in range(300): 
         await asyncio.sleep(1) 
-        status = await check_voltx_otp(phone, order_id)
-        if status:
-            otp_message = f"🚨 **NEW OTP RECEIVED!** 🚨\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
-            try:
+        try:
+            status = await check_voltx_otp(phone, order_id)
+            if status:
+                # Markdown-এর ক্র্যাশ এড়াতে HTML ফরম্যাট ব্যবহার করা হয়েছে
+                otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{phone}</code>\n🔑 <b>OTP Code:</b> <code>{status}</code>"
                 await context.bot.send_message(
                     chat_id=chat_id, 
                     text=otp_message, 
-                    parse_mode="Markdown",
-                    disable_notification=False
+                    parse_mode="HTML"
                 )
-            except Exception as e:
-                print(f"Notification Error: {e}")
-            return
+                return  # কোড পেলে লুপ বন্ধ করে দিবে
+        except Exception as e:
+            print(f"Polling Error: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
@@ -229,14 +179,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "x" in clean_text.lower() or clean_text.isdigit():
             USER_STATES[user_id] = None
             USER_RANGES[user_id] = clean_text
-            await update.message.reply_text(f"🔴 Target range updated to: `{clean_text}`", parse_mode="Markdown")
+            await update.message.reply_text(f"🔴 Target range updated to: <b>{clean_text}</b>", parse_mode="HTML")
         else:
             await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
         return
 
     if text == "📞 Get API Number":
         user_range = USER_RANGES.get(user_id, "22896")
-        
         numbers = []
         orders = []
 
@@ -244,18 +193,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             p, oid = await get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
-                if oid:
-                    orders.append((p, oid))
+                if oid: orders.append((p, oid))
 
         if not numbers:
-            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Check **🟢 Live Traffic**.", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ <b>No Real Number Available!</b>\n\nPanel has no stock for range <code>{user_range}</code>.", parse_mode="HTML")
             return
 
         country_name, _, flag = get_country_info(numbers[0])
-        header_text = f"✅ **Number:** {flag} {country_name}"
+        header_text = f"✅ <b>Number:</b> {flag} {country_name}"
         
         reply_markup = create_number_markup(numbers)
-        await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
+        await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
         
         for p, oid in orders:
             asyncio.create_task(poll_for_otp(update.effective_chat.id, oid, p, context))
@@ -268,25 +216,23 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sorted_ranges, total_hits = await fetch_live_traffic_from_panel()
         
         traffic_lines = [
-            "📊 **Live Traffic**\n",
-            f"📋 **Total OTP:** {total_hits}",
-            f"⏱ **Record:** Last 15 Minutes"
+            "📊 <b>Live Traffic</b>\n",
+            f"📋 <b>Total OTP:</b> {total_hits}",
+            f"⏱ <b>Record:</b> Last 15 Minutes\n"
         ]
         
         if sorted_ranges:
             top_r, top_info = sorted_ranges[0]
             _, _, top_flag = get_country_info(top_r)
-            traffic_lines.append(f"👑 **Top Range:** {top_flag} `{top_r}` - {top_info['sid']}")
-            traffic_lines.append("\n📥 **Range List**")
-            
+            traffic_lines.append(f"👑 <b>Top Range:</b> {top_flag} <code>{top_r}</code> - {top_info['sid']}")
+            traffic_lines.append("\n📥 <b>Range List</b>")
             for r, info in sorted_ranges:
                 _, _, flag = get_country_info(r)
-                traffic_lines.append(f"• {flag} `{r}` - {info['sid']} - {info['count']}")
+                traffic_lines.append(f"• {flag} <code>{r}</code> - {info['sid']} - {info['count']}")
         else:
             traffic_lines.append("⚠️ No active ranges found right now.")
         
-        traffic_lines.append("\n⚡ Copy a range and use **⚙️ Set Range** to target it!")
-        await update.message.reply_text("\n".join(traffic_lines), parse_mode="Markdown")
+        await update.message.reply_text("\n".join(traffic_lines), parse_mode="HTML")
 
     elif text == "💳 Balance":
         balance_markup = InlineKeyboardMarkup([
@@ -306,7 +252,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "change_number":
         user_id = query.from_user.id
         user_range = USER_RANGES.get(user_id, "22896")
-        
         numbers = []
         orders = []
 
@@ -314,18 +259,17 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             p, oid = await get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
-                if oid:
-                    orders.append((p, oid))
+                if oid: orders.append((p, oid))
 
         if not numbers:
             return
 
         country_name, _, flag = get_country_info(numbers[0])
-        header_text = f"✅ **Number:** {flag} {country_name}"
+        header_text = f"✅ <b>Number:</b> {flag} {country_name}"
         
         reply_markup = create_number_markup(numbers)
         try:
-            await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
+            await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
         except Exception:
             pass
 
@@ -339,8 +283,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         await start(update, context)
 
-    elif query.data == "withdraw_binance":
-        pass
     elif query.data == "set_binance":
         await query.message.reply_text("Please send your Binance Pay ID:")
 
