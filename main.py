@@ -60,14 +60,17 @@ def extract_all_ranges(data, found_set):
     if isinstance(data, dict):
         for k, v in data.items():
             if k.lower() in ["rid", "range", "prefix"] and isinstance(v, (str, int)):
-                found_set.add(str(v))
+                val_str = str(v).strip()
+                if 3 <= len(val_str) <= 6:  # শুধু ছোট ও সঠিক রেঞ্জ আইডিগুলো ফিল্টার করবে
+                    found_set.add(val_str)
             else:
                 extract_all_ranges(v, found_set)
     elif isinstance(data, list):
         for item in data:
-            extract_all_ranges(item, found_set)
-    elif isinstance(data, (str, int)) and str(data).isdigit() and len(str(data)) >= 4:
-        found_set.add(str(data))
+            if isinstance(item, (str, int)) and 3 <= len(str(item)) <= 6:
+                found_set.add(str(item))
+            else:
+                extract_all_ranges(item, found_set)
 
 def fetch_live_traffic_from_panel():
     headers = {
@@ -236,7 +239,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data.startswith("copy_"):
         copied_num = query.data.replace("copy_", "")
-        # show_alert=False করার ফলে এখন আর বিরক্তিকর OK পপআপ আসবে না, শুধু ছোট টোস্ট দেখাবে
         await query.answer(f"✅ Copied: {copied_num}", show_alert=False)
         return
 
