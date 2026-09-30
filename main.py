@@ -7,6 +7,7 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 VOLTX_API_KEY = "MHPU3S5IV1A"
+BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
 YOUR_TELEGRAM_USERNAME = "smmsaport"
 
 USER_STATES = {}
@@ -44,39 +45,47 @@ def get_country_info(phone_number):
         return "🇨🇮 IVORY COAST (CI)", "ci"
 
 def get_voltx_real_number(service="fb", country="tg"):
-    """Strictly fetches real numbers from VoltxSMS API without any fake/random generation"""
     headers = {
-        "Authorization": f"Bearer {VOLTX_API_KEY}",
-        "Accept": "application/json"
+        "mauthapi": VOLTX_API_KEY,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
     }
     
+    # Correct endpoints based on the panel's documentation structure
     endpoints = [
-        f"https://voltxsms.com/api/v1/getNumber?service={service}&country={country}",
-        f"https://voltxsms.com/api/getNumber?api_key={VOLTX_API_KEY}&service={service}&country={country}",
-        f"https://voltxsms.com/api/buy?apiKey={VOLTX_API_KEY}&service={service}&country={country}"
+        f"{BASE_API_URL}/gotnum?service={service}&country={country}",
+        f"{BASE_API_URL}/getNumber?service={service}&country={country}",
+        f"{BASE_API_URL}/buy?service={service}&country={country}"
     ]
     
     for url in endpoints:
         try:
+            # Trying both GET and POST requests to ensure compatibility
             res = requests.get(url, headers=headers, timeout=8)
+            if res.status_code != 200:
+                res = requests.post(url, headers=headers, json={"service": service, "country": country}, timeout=8)
+                
+            print(f"URL: {url} | Status: {res.status_code} | Text: {res.text}")
+            
             if res.status_code == 200:
                 data = res.json()
-                phone = data.get("number") or data.get("phone") or data.get("phoneNumber")
+                phone = data.get("number") or data.get("phone") or data.get("phoneNumber") or data.get("tel")
                 order_id = data.get("id") or data.get("order_id") or data.get("orderId")
                 if phone:
                     return str(phone), order_id
-        except Exception:
+        except Exception as e:
+            print(f"Error for {url}: {e}")
             continue
 
     return None, None
 
 def check_voltx_otp(order_id):
     headers = {
-        "Authorization": f"Bearer {VOLTX_API_KEY}",
+        "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json"
     }
     try:
-        url = f"https://voltxsms.com/api/v1/getOtp?id={order_id}"
+        url = f"{BASE_API_URL}/getotp?id={order_id}"
         res = requests.get(url, headers=headers, timeout=8)
         if res.status_code == 200:
             data = res.json()
@@ -143,7 +152,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         numbers = []
         orders = []
 
-        # Fetch only actual numbers from API (up to 3)
         for _ in range(3):
             p, oid = get_voltx_real_number(service="fb", country=country_code)
             if p and p not in numbers:
@@ -153,7 +161,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.3)
 
         if not numbers:
-            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel currently has no stock for range `{user_range}`. Please select another range from **🟢 Live Traffic**.", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel currently has no stock for range `{user_range}` or API connection needs check.", parse_mode="Markdown")
             return
 
         num_text = "\n".join([f"📱 `{p}`" for p in numbers])
