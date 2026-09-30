@@ -38,16 +38,14 @@ def get_country_info(phone_number):
     else:
         return "Togo", "TG", "🇹🇬"
 
-def get_voltx_real_number(target_range="22896"):
+def _sync_get_voltx_real_number(target_range):
     headers = {
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json",
         "Content-Type": "application/json"
     }
-    
     clean_rid = str(target_range).upper().replace("XXX", "").replace("X", "").strip()
     payload = {"rid": clean_rid}
-    
     try:
         res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=3)
         if res.status_code == 200:
@@ -61,17 +59,18 @@ def get_voltx_real_number(target_range="22896"):
                     return str(phone), str(order_id)
     except Exception as e:
         print(f"API Error: {e}")
-
     return None, None
 
-def fetch_live_traffic_from_panel():
+async def get_voltx_real_number(target_range="22896"):
+    return await asyncio.to_thread(_sync_get_voltx_real_number, target_range)
+
+def _sync_fetch_live_traffic():
     headers = {
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json"
     }
     range_counts = {}
     total_hits = 0
-    
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
         if res.status_code == 200:
@@ -117,12 +116,14 @@ def fetch_live_traffic_from_panel():
     sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1]["count"], reverse=True)
     return sorted_ranges, total_hits
 
-def check_voltx_otp(target_phone, order_id):
+async def fetch_live_traffic_from_panel():
+    return await asyncio.to_thread(_sync_fetch_live_traffic)
+
+def _sync_check_voltx_otp(target_phone, order_id):
     headers = {
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json"
     }
-    
     clean_target = str(target_phone).replace("+", "").strip()
     
     try:
@@ -164,8 +165,10 @@ def check_voltx_otp(target_phone, order_id):
                             return msg
     except Exception:
         pass
-            
     return None
+
+async def check_voltx_otp(target_phone, order_id):
+    return await asyncio.to_thread(_sync_check_voltx_otp, target_phone, order_id)
 
 def create_number_markup(numbers_list):
     keyboard = []
@@ -187,10 +190,9 @@ def create_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
-    # প্রতি ১ সেকেন্ড পরপর চেক করবে যাতে কোড আসার সাথে সাথেই নোটিফিকেশন চলে আসে
     for _ in range(120): 
-        await asyncio.sleep(1)
-        status = check_voltx_otp(phone, order_id)
+        await asyncio.sleep(2) # ২ সেকেন্ড ইন্টারভাল রাখা হলো সার্ভার এবং বট নিরাপদ রাখতে
+        status = await check_voltx_otp(phone, order_id)
         if status:
             otp_message = f"🚨 **NEW OTP RECEIVED!** 🚨\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
             try:
@@ -237,7 +239,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         orders = []
 
         for _ in range(2):
-            p, oid = get_voltx_real_number(target_range=user_range)
+            p, oid = await get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
                 if oid:
@@ -261,7 +263,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
 
     elif text == "🟢 Live Traffic":
-        sorted_ranges, total_hits = fetch_live_traffic_from_panel()
+        sorted_ranges, total_hits = await fetch_live_traffic_from_panel()
         
         traffic_lines = [
             "📊 **Live Traffic**\n",
@@ -307,7 +309,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         orders = []
 
         for _ in range(2):
-            p, oid = get_voltx_real_number(target_range=user_range)
+            p, oid = await get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
                 if oid:
