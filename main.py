@@ -9,7 +9,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 VOLTX_API_KEY = "MHPU3S5IV1A"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
-YOUR_TELEGRAM_USERNAME = "smmsaport"
+YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
 
 USER_STATES = {}
 USER_RANGES = {}
