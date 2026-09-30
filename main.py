@@ -126,6 +126,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
     }
     clean_target = str(target_phone).replace("+", "").strip()
     
+    # প্রথমে /console চেক করবে (অন্য ডিভাইস বা প্যানেলের হিটগুলো ধরার জন্য)
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
@@ -145,6 +146,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
     except Exception:
         pass
 
+    # এরপর /success-otp চেক করবে
     try:
         res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
         if res.status_code == 200:
@@ -191,7 +193,7 @@ def create_number_markup(numbers_list):
 
 async def poll_for_otp(chat_id, order_id, phone, context):
     for _ in range(120): 
-        await asyncio.sleep(2) # ২ সেকেন্ড ইন্টারভাল রাখা হলো সার্ভার এবং বট নিরাপদ রাখতে
+        await asyncio.sleep(1) 
         status = await check_voltx_otp(phone, order_id)
         if status:
             otp_message = f"🚨 **NEW OTP RECEIVED!** 🚨\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
