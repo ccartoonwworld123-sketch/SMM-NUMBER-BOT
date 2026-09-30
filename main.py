@@ -18,7 +18,7 @@ def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
     if clean_num.startswith("237"): return "Cameroon", "CM", "🇨🇲"
     elif clean_num.startswith("225"): return "Ivory Coast", "CI", "🇨🇮"
-    elif clean_num.startswith("228"): return "Togo", "TG", "🇹🇬"
+    elif clean_num.startswith("228"): return "Togo", "TG", "🇨🇮"
     elif clean_num.startswith("229"): return "Benin", "BJ", "🇧🇯"
     elif clean_num.startswith("255"): return "Tanzania", "TZ", "🇹🇿"
     elif clean_num.startswith("266"): return "Lesotho", "LS", "🇱🇸"
@@ -40,12 +40,11 @@ def _sync_get_voltx_real_number(target_range):
         res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=3)
         if res.status_code == 200:
             res_data = res.json()
-            if res_data.get("meta", {}).get("code") == 200:
-                data = res_data.get("data", {})
-                phone = data.get("full_number") or data.get("national_number") or data.get("phone")
-                order_id = res_data.get("id") or data.get("rid") or clean_rid
-                if phone:
-                    return str(phone), str(order_id)
+            data = res_data.get("data", {})
+            phone = data.get("full_number") or data.get("national_number") or data.get("phone") or data.get("number")
+            order_id = res_data.get("id") or data.get("id") or res_data.get("rid") or clean_rid
+            if phone:
+                return str(phone), str(order_id)
     except Exception as e:
         print(f"API Error: {e}")
     return None, None
@@ -60,19 +59,22 @@ def _sync_fetch_live_traffic():
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
         if res.status_code == 200:
-            hits = res.json().get("data", {}).get("hits", [])
-            total_hits = len(hits)
-            for hit in hits:
-                r = hit.get("range")
-                sid = hit.get("sid", "FACEBOOK")
-                if r:
-                    clean_r = str(r).strip()
-                    if clean_r in range_counts:
-                        range_counts[clean_r]["count"] += 1
-                    else:
-                        range_counts[clean_r] = {"sid": sid.upper(), "count": 1}
-    except Exception:
-        pass
+            res_json = res.json()
+            hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
+            if isinstance(hits, list):
+                total_hits = len(hits)
+                for hit in hits:
+                    if not isinstance(hit, dict): continue
+                    r = hit.get("range") or hit.get("rid")
+                    sid = hit.get("sid", "FACEBOOK")
+                    if r:
+                        clean_r = str(r).strip()
+                        if clean_r in range_counts:
+                            range_counts[clean_r]["count"] += 1
+                        else:
+                            range_counts[clean_r] = {"sid": str(sid).upper(), "count": 1}
+    except Exception as e:
+        print(f"Traffic Error: {e}")
     sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1]["count"], reverse=True)
     return sorted_ranges, total_hits
 
@@ -81,46 +83,57 @@ async def fetch_live_traffic_from_panel():
 
 def _sync_check_voltx_otp(target_phone, order_id):
     headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
-    
-    # নাম্বারের ভেতরের সব অক্ষর বাদ দিয়ে শুধু সংখ্যা বের করা হচ্ছে
     clean_target = ''.join(filter(str.isdigit, str(target_phone)))
-    # ১০০% ম্যাচিং এর জন্য নাম্বারের শেষের ৬ ডিজিট নেওয়া হচ্ছে
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
-    # ১. কনসোল চেক (অন্য ডিভাইস বা প্যানেল থেকে কোড আসলেও ধরবে)
+    # 1. Debugging er jonno console response print korbe
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
-            hits = res.json().get("data", {}).get("hits", [])
-            for hit in hits:
-                if not isinstance(hit, dict): continue
-                num_raw = str(hit.get("number", "") or hit.get("phone", "") or "")
-                msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", ""))
-                clean_num = ''.join(filter(str.isdigit, num_raw))
-                
-                if short_target in clean_num or short_target in msg:
-                    match = re.search(r'\b\d{4,8}\b', msg)
-                    return match.group(0) if match else msg
-    except Exception:
-        pass
+            res_json = res.json()
+            # Pura response terminal-e dekhaben jodi code na ase
+            hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
+            if isinstance(hits, list):
+                for hit in hits:
+                    if not isinstance(hit, dict): continue
+                    # Sob possible keys check korbe
+                    num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
+                    msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", ""))
+                    
+                    clean_num = ''.join(filter(str.isdigit, num_raw))
+                    
+                    if short_target in clean_num or short_target in msg or (clean_target and clean_target in clean_num):
+                        match = re.search(r'\b\d{4,8}\b', msg)
+                        if match:
+                            return match.group(0)
+                        elif msg:
+                            return msg
+    except Exception as e:
+        print(f"Console Check Error: {e}")
 
-    # ২. সাকসেস-ওটিপি চেক
+    # 2. Success-otp endpoint check
     try:
         res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
         if res.status_code == 200:
-            otps = res.json().get("data", {}).get("otps", [])
-            for item in otps:
-                if not isinstance(item, dict): continue
-                num_raw = str(item.get("number", "") or item.get("phone", "") or "")
-                oid = str(item.get("otp_id", "") or item.get("id", ""))
-                msg = str(item.get("message", "") or item.get("sms", "") or item.get("text", ""))
-                clean_num = ''.join(filter(str.isdigit, num_raw))
-                
-                if short_target in clean_num or short_target in msg or (order_id and str(order_id) == oid):
-                    match = re.search(r'\b\d{4,8}\b', msg)
-                    return match.group(0) if match else msg
-    except Exception:
-        pass
+            res_json = res.json()
+            otps = res_json.get("data", {}).get("otps", []) or res_json.get("data", []) or res_json.get("otps", [])
+            if isinstance(otps, list):
+                for item in otps:
+                    if not isinstance(item, dict): continue
+                    num_raw = str(item.get("number", "") or item.get("phone", "") or item.get("full_number", "") or item.get("receiver", ""))
+                    oid = str(item.get("otp_id", "") or item.get("id", "") or item.get("order_id", ""))
+                    msg = str(item.get("message", "") or item.get("sms", "") or item.get("text", "") or item.get("content", "") or item.get("otp", ""))
+                    
+                    clean_num = ''.join(filter(str.isdigit, num_raw))
+                    
+                    if short_target in clean_num or short_target in msg or (order_id and str(order_id) in oid):
+                        match = re.search(r'\b\d{4,8}\b', msg)
+                        if match:
+                            return match.group(0)
+                        elif msg:
+                            return msg
+    except Exception as e:
+        print(f"Success-OTP Error: {e}")
         
     return None
 
@@ -141,22 +154,20 @@ def create_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
-    # ৫ মিনিট পর্যন্ত প্রতি ১ সেকেন্ড পর পর চেক করবে!
     for _ in range(300): 
         await asyncio.sleep(1) 
         try:
             status = await check_voltx_otp(phone, order_id)
             if status:
-                # Markdown-এর ক্র্যাশ এড়াতে HTML ফরম্যাট ব্যবহার করা হয়েছে
                 otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{phone}</code>\n🔑 <b>OTP Code:</b> <code>{status}</code>"
                 await context.bot.send_message(
                     chat_id=chat_id, 
                     text=otp_message, 
                     parse_mode="HTML"
                 )
-                return  # কোড পেলে লুপ বন্ধ করে দিবে
+                return
         except Exception as e:
-            print(f"Polling Error: {e}")
+            print(f"Polling Send Error: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
@@ -214,13 +225,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "🟢 Live Traffic":
         sorted_ranges, total_hits = await fetch_live_traffic_from_panel()
-        
-        traffic_lines = [
-            "📊 <b>Live Traffic</b>\n",
-            f"📋 <b>Total OTP:</b> {total_hits}",
-            f"⏱ <b>Record:</b> Last 15 Minutes\n"
-        ]
-        
+        traffic_lines = ["📊 <b>Live Traffic</b>\n", f"📋 <b>Total OTP:</b> {total_hits}", f"⏱ <b>Record:</b> Last 15 Minutes\n"]
         if sorted_ranges:
             top_r, top_info = sorted_ranges[0]
             _, _, top_flag = get_country_info(top_r)
@@ -231,7 +236,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 traffic_lines.append(f"• {flag} <code>{r}</code> - {info['sid']} - {info['count']}")
         else:
             traffic_lines.append("⚠️ No active ranges found right now.")
-        
         await update.message.reply_text("\n".join(traffic_lines), parse_mode="HTML")
 
     elif text == "💳 Balance":
@@ -261,28 +265,22 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 numbers.append(p)
                 if oid: orders.append((p, oid))
 
-        if not numbers:
-            return
+        if not numbers: return
 
         country_name, _, flag = get_country_info(numbers[0])
         header_text = f"✅ <b>Number:</b> {flag} {country_name}"
-        
         reply_markup = create_number_markup(numbers)
         try:
             await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
-        except Exception:
-            pass
+        except Exception: pass
 
         for p, oid in orders:
             asyncio.create_task(poll_for_otp(query.message.chat_id, oid, p, context))
 
     elif query.data == "back_home":
-        try:
-            await query.message.delete()
-        except Exception:
-            pass
+        try: await query.message.delete()
+        except Exception: pass
         await start(update, context)
-
     elif query.data == "set_binance":
         await query.message.reply_text("Please send your Binance Pay ID:")
 
