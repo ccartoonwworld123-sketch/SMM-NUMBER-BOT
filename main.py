@@ -146,8 +146,8 @@ def check_voltx_otp(order_id):
 def create_number_markup(numbers_list):
     keyboard = []
     for num in numbers_list:
-        # স্ক্রিনশটের মতো সরাসরি বাটনে নাম্বার এবং কপি আইকন থাকবে
-        keyboard.append([InlineKeyboardButton(f"📋 {num}", callback_data=f"copy_{num}")])
+        # স্ক্রিনশটের মতো দেখতে হুবহু বাটন ডিজাইন
+        keyboard.append([InlineKeyboardButton(f"📋  {num}", callback_data=f"copy_{num}")])
     
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
     return InlineKeyboardMarkup(keyboard)
@@ -163,7 +163,7 @@ async def poll_for_otp(chat_id, order_id, phone, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️️ Set Range"],
+        ["📞 Get API Number", "⚙️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
@@ -255,7 +255,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     
-    # কপিতে ক্লিক করলে নোটিফিকেশন হাইড রাখার জন্য খালি query.answer() ব্যবহার করা হয়েছে
+    # নোটিফিকেশন বা পপ-আপ রিমুভ করার জন্য প্যারামিটার ছাড়া ফাকা রাখা হয়েছে
     await query.answer()
 
     if query.data.startswith("copy_"):
