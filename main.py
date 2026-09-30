@@ -4,8 +4,8 @@ import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# Telegram Bot Token
-BOT_TOKEN = "8752686767:AAG8rwokonZyOQuK51yEeXoCWImPoEDVAiI"
+# Telegram Bot Token (আপডেট করা নতুন টোকেন)
+BOT_TOKEN = "8752686767:AAGLut2j5_JitJDuIWhBiXCVAxVcGq93ax0"
 
 def get_3_numbers():
     return [f"+22507{random.randint(10000000, 99999999)}" for _ in range(3)]
