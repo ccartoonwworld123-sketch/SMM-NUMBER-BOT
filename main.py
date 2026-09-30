@@ -5,6 +5,9 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Cal
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
+# আপনার দেওয়া সাপোর্ট ইউজারনেম
+YOUR_TELEGRAM_USERNAME = "smmsaport"
+
 def get_3_numbers():
     return [f"+22507{random.randint(10000000, 99999999)}" for _ in range(3)]
 
@@ -52,7 +55,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🎪 Leaderboard: No active rankings.")
 
     elif text == "🔓 Support":
-        await update.message.reply_text("🔓 Support: Contact Admin.")
+        support_text = f"🔓 Support: Contact Admin 👉 t.me/{YOUR_TELEGRAM_USERNAME}"
+        await update.message.reply_text(support_text)
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
