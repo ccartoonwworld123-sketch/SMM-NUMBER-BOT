@@ -81,9 +81,11 @@ def _sync_check_voltx_otp(target_phone, order_id):
                     
                     if short_target in clean_num or short_target in msg or (clean_target and clean_target in clean_num):
                         if msg:
-                            # যদি হিট থেকে রেঞ্জ পাওয়া যায় তা রিটার্ন করব, নতুবা শুধু মেসেজ
-                            hit_range = hit.get("range") or hit.get("rid") or ""
-                            return msg, str(hit_range)
+                            extracted_range = hit.get("range") or hit.get("rid") or hit.get("prefix") or ""
+                            if not extracted_range and len(clean_num) >= 5:
+                                # আপনার স্ক্রিনশটের মতো সঠিক ফরম্যাটে রেঞ্জ তৈরি (যেমন: 22896XXX বা 25565XXX)[span_5](start_span)[span_5](end_span)
+                                extracted_range = clean_num[:5] + "XXX"
+                            return msg, str(extracted_range)
     except Exception as e:
         print(f"Console Check Error: {e}")
 
@@ -104,6 +106,8 @@ def _sync_check_voltx_otp(target_phone, order_id):
                     if short_target in clean_num or short_target in msg or (order_id and str(order_id) in oid):
                         if msg:
                             item_range = item.get("range") or item.get("rid") or ""
+                            if not item_range and len(clean_num) >= 5:
+                                item_range = clean_num[:5] + "XXX"
                             return msg, str(item_range)
     except Exception as e:
         print(f"Success-OTP Error: {e}")
@@ -134,16 +138,26 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
             if full_msg:
                 country_name, country_code, flag, lang = get_country_info(phone)
                 
-                # রেঞ্জ নির্ধারণের লজিক: API থেকে পেলে সেটা, না হলে ইউজারের সেট করা রেঞ্জ, না হলে ফোন নম্বর থেকে কেটে নেওয়া রেঞ্জ
-                final_range = detected_range if detected_range and detected_range != "None" else (user_range if user_range else phone[:5])
-                formatted_range = f"{final_range}XXX" if not final_range.endswith("XXX") else final_range
+                # রেঞ্জ নিখুঁتভাবে সাজানো যাতে সবসময় স্ক্রিনশটের মতো XXX সহ দেখায়[span_6](start_span)[span_6](end_span)
+                if detected_range and detected_range != "None" and detected_range != "":
+                    raw_r = detected_range.upper().replace("XXX", "").replace("X", "").strip()
+                elif user_range:
+                    raw_r = str(user_range).upper().replace("XXX", "").replace("X", "").strip()
+                else:
+                    raw_r = phone[:5]
+                
+                # ৫ বা ৬ ডিজিট ঠিক রেখে শেষে XXX যুক্ত করা
+                if len(raw_r) >= 5:
+                    final_range = raw_r[:5] + "XXX"
+                else:
+                    final_range = raw_r + "XXX"
                 
                 otp_message = (
                     f"<b>OTP</b>                         <b>Admin</b>\n"
                     f"<b>f FB LITE OTP RECEIVE</b>\n"
                     f"────────────────────────\n"
                     f"{flag} <b>Country :</b> {country_code}\n"
-                    f"🎯 <b>Range :</b> <code>{formatted_range}</code>\n"
+                    f"🎯 <b>Range :</b> <code>{final_range}</code>\n"
                     f"🗣 <b>Language :</b> {lang}\n"
                     f"────────────────────────\n"
                     f"✉️ <b>Message :</b>\n"
@@ -176,7 +190,7 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️️ Set Range"],
+        ["📞 Get API Number", "⚙ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
