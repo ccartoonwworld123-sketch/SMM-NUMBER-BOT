@@ -81,7 +81,9 @@ def _sync_check_voltx_otp(target_phone, order_id):
                     
                     if short_target in clean_num or short_target in msg or (clean_target and clean_target in clean_num):
                         if msg:
-                            return msg
+                            # যদি হিট থেকে রেঞ্জ পাওয়া যায় তা রিটার্ন করব, নতুবা শুধু মেসেজ
+                            hit_range = hit.get("range") or hit.get("rid") or ""
+                            return msg, str(hit_range)
     except Exception as e:
         print(f"Console Check Error: {e}")
 
@@ -101,11 +103,12 @@ def _sync_check_voltx_otp(target_phone, order_id):
                     
                     if short_target in clean_num or short_target in msg or (order_id and str(order_id) in oid):
                         if msg:
-                            return msg
+                            item_range = item.get("range") or item.get("rid") or ""
+                            return msg, str(item_range)
     except Exception as e:
         print(f"Success-OTP Error: {e}")
         
-    return None
+    return None, None
 
 async def check_voltx_otp(target_phone, order_id):
     return await asyncio.to_thread(_sync_check_voltx_otp, target_phone, order_id)
@@ -127,12 +130,14 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
     for _ in range(600): 
         await asyncio.sleep(0.5) 
         try:
-            full_msg = await check_voltx_otp(phone, order_id)
+            full_msg, detected_range = await check_voltx_otp(phone, order_id)
             if full_msg:
                 country_name, country_code, flag, lang = get_country_info(phone)
-                formatted_range = f"{user_range}XXX" if not user_range.endswith("XXX") else user_range
                 
-                # স্ক্রিনশটের ডিজাইন অনুযায়ী মেসেজ ফরম্যাট
+                # রেঞ্জ নির্ধারণের লজিক: API থেকে পেলে সেটা, না হলে ইউজারের সেট করা রেঞ্জ, না হলে ফোন নম্বর থেকে কেটে নেওয়া রেঞ্জ
+                final_range = detected_range if detected_range and detected_range != "None" else (user_range if user_range else phone[:5])
+                formatted_range = f"{final_range}XXX" if not final_range.endswith("XXX") else final_range
+                
                 otp_message = (
                     f"<b>OTP</b>                         <b>Admin</b>\n"
                     f"<b>f FB LITE OTP RECEIVE</b>\n"
@@ -149,14 +154,12 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
                     [InlineKeyboardButton("NUMBER BOT", url=f"https://t.me/{context.bot.username}")]
                 ])
 
-                # ১. ইউজারের প্রাইভেট চ্যাটে পাঠানো
                 await context.bot.send_message(
                     chat_id=chat_id, 
                     text=otp_message, 
                     parse_mode="HTML"
                 )
                 
-                # ২. ওটিপি গ্রুপে পাঠানো (যদি গ্রুপ আইডি দেওয়া থাকে)
                 if OTP_GROUP_CHAT_ID:
                     try:
                         await context.bot.send_message(
@@ -173,7 +176,7 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️ Set Range"],
+        ["📞 Get API Number", "⚙️️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
@@ -226,7 +229,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
 
     elif text == "🟢 Live Traffic":
-        # Live traffic implementation remains standard
         await update.message.reply_text("Fetching live traffic...", parse_mode="HTML")
 
     elif text == "💳 Balance":
