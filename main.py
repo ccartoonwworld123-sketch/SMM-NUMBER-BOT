@@ -1,10 +1,8 @@
 import os
 import random
-import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# Telegram Bot Token (Render Environment Variable system)
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 def get_3_numbers():
@@ -13,8 +11,12 @@ def get_3_numbers():
 def create_number_markup(numbers):
     keyboard = []
     for num in numbers:
-        keyboard.append([InlineKeyboardButton(f"📱 {num}", callback_data=f"num_{num}")])
+        keyboard.append([InlineKeyboardButton(f"👤 📋 {num}", callback_data=f"num_{num}")])
+    
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
+    keyboard.append([InlineKeyboardButton("🌐 Change Country", callback_data="change_country")])
+    keyboard.append([InlineKeyboardButton("🔑 OTP Group ↗️", url="https://t.me/smmsaport")]) # আপনার গ্রুপের লিংক দিতে পারেন
+    
     return InlineKeyboardMarkup(keyboard)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -26,7 +28,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     
     welcome_text = (
-        "Welcome to OTP Bot! 🤖\n\n"
+        "Welcome to SMM NUMBER PANEL bot! 🤖\n\n"
         "Please select an option from the menu below:"
     )
     await update.message.reply_text(welcome_text, reply_markup=markup)
@@ -41,7 +43,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(header_text, reply_markup=reply_markup)
 
     elif text == "📊 Live Traffic":
-        await update.message.reply_text("📊 Live Traffic: All systems operational.")
+        await update.message.reply_text("📊 Live Traffic: All servers active!")
 
     elif text == "👤 My Profile":
         await update.message.reply_text(f"👤 Profile: {update.effective_user.first_name}")
@@ -50,7 +52,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🎪 Leaderboard: No active rankings.")
 
     elif text == "🔓 Support":
-        await update.message.reply_text("সাপোর্টের জন্য যোগাযোগ করুন: https://t.me/smmsaport")
+        await update.message.reply_text("🔒 Support: Contact Admin.")
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -61,6 +63,9 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         header_text = "❓ Country: 🇨🇮 IVORY COAST (CI)\n⏳ Waiting for OTP..."
         reply_markup = create_number_markup(nums)
         await query.edit_message_text(header_text, reply_markup=reply_markup)
+
+    elif query.data == "change_country":
+        await query.answer("Country list will be updated soon!", show_alert=True)
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).build()
