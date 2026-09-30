@@ -47,7 +47,7 @@ def get_voltx_real_number(target_range="22896"):
     payload = {"rid": clean_rid}
     
     try:
-        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=6)
+        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=3)
         if res.status_code == 200:
             res_data = res.json()
             meta = res_data.get("meta", {})
@@ -71,7 +71,7 @@ def fetch_live_traffic_from_panel():
     total_hits = 0
     
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=6)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
         if res.status_code == 200:
             res_data = res.json()
             if res_data.get("meta", {}).get("code") == 200:
@@ -93,7 +93,7 @@ def fetch_live_traffic_from_panel():
 
     if not range_counts:
         try:
-            res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=6)
+            res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=3)
             if res.status_code == 200:
                 res_data = res.json()
                 if res_data.get("meta", {}).get("code") == 200:
@@ -129,7 +129,7 @@ def check_voltx_otp(order_id):
     
     for url in endpoints:
         try:
-            res = requests.get(url, headers=headers, timeout=5)
+            res = requests.get(url, headers=headers, timeout=2)
             if res.status_code == 200:
                 data = res.json()
                 sms_code = data.get("sms") or data.get("code") or data.get("otp") or data.get("text")
@@ -143,24 +143,18 @@ def check_voltx_otp(order_id):
             
     return None
 
-def create_number_markup(numbers_list, user_range):
+def create_number_markup(numbers_list):
     keyboard = []
     for num in numbers_list:
-        # নাম্বার মেসেজে দেখানোর পাশাপাশি নিচে আলাদা কপি বাটন রাখা হলো
-        keyboard.append([
-            InlineKeyboardButton(f"📱 {num}", callback_data="ignore"),
-            InlineKeyboardButton("📋 Copy", callback_data=f"copy_{num}")
-        ])
+        # স্ক্রিনশটের মতো সরাসরি বাটনে নাম্বার এবং কপি আইকন থাকবে
+        keyboard.append([InlineKeyboardButton(f"📋 {num}", callback_data=f"copy_{num}")])
     
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
-    keyboard.append([InlineKeyboardButton("🌐 Change Country", callback_data="change_country")])
-    keyboard.append([InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")])
-    
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
     for _ in range(60): 
-        await asyncio.sleep(5)
+        await asyncio.sleep(4)
         status = check_voltx_otp(order_id)
         if status:
             otp_message = f"✅ **OTP Received!**\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
@@ -169,7 +163,7 @@ async def poll_for_otp(chat_id, order_id, phone, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️ Set Range"],
+        ["📞 Get API Number", "⚙️️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
@@ -194,29 +188,26 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == "📞 Get API Number":
-        await update.message.reply_text("⏳ Requesting real numbers from Voltx Panel...")
-        
         user_range = USER_RANGES.get(user_id, "22896")
         
         numbers = []
         orders = []
 
-        for _ in range(3):
+        for _ in range(2):
             p, oid = get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
                 if oid:
                     orders.append((p, oid))
-            await asyncio.sleep(0.1)
 
         if not numbers:
             await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Check **🟢 Live Traffic**.", parse_mode="Markdown")
             return
 
         country_name, _, _ = get_country_info(numbers[0])
-        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}\n\n⏳ Waiting for OTP..."
+        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}"
         
-        reply_markup = create_number_markup(numbers, user_range)
+        reply_markup = create_number_markup(numbers)
         await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
         
         for p, oid in orders:
@@ -227,7 +218,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
 
     elif text == "🟢 Live Traffic":
-        await update.message.reply_text("⏳ Fetching live traffic directly from Voltx panel...")
         sorted_ranges, total_hits = fetch_live_traffic_from_panel()
         
         traffic_lines = [
@@ -265,17 +255,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     
-    if query.data.startswith("copy_"):
-        copied_num = query.data.replace("copy_", "")
-        # টেলিগ্রামে পপ-আপ অ্যালার্ট ও ক্লিপবোর্ডে কপি করার সুবিধা দিতে নিচের কোড কাজ করবে
-        await query.answer(f"✅ Copied: {copied_num}", show_alert=True)
-        return
-
-    if query.data == "ignore":
-        await query.answer("Please click the 'Copy' button beside the number!", show_alert=False)
-        return
-
+    # কপিতে ক্লিক করলে নোটিফিকেশন হাইড রাখার জন্য খালি query.answer() ব্যবহার করা হয়েছে
     await query.answer()
+
+    if query.data.startswith("copy_"):
+        return
 
     if query.data == "change_number":
         user_id = query.from_user.id
@@ -284,33 +268,27 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         numbers = []
         orders = []
 
-        for _ in range(3):
+        for _ in range(2):
             p, oid = get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
                 if oid:
                     orders.append((p, oid))
-            await asyncio.sleep(0.1)
 
         if not numbers:
-            await query.message.reply_text(f"❌ No real numbers available in panel for range `{user_range}` right now.")
             return
 
         country_name, _, _ = get_country_info(numbers[0])
-        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}\n\n⏳ Waiting for OTP..."
+        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}"
         
-        reply_markup = create_number_markup(numbers, user_range)
+        reply_markup = create_number_markup(numbers)
         await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
 
         for p, oid in orders:
             asyncio.create_task(poll_for_otp(query.message.chat_id, oid, p, context))
 
-    elif query.data == "change_country":
-        await query.answer("Country list will be updated soon!", show_alert=True)
-        
     elif query.data == "withdraw_binance":
-        await query.answer("Minimum withdraw is $0.2", show_alert=True)
-        
+        pass
     elif query.data == "set_binance":
         await query.message.reply_text("Please send your Binance Pay ID:")
 
@@ -324,10 +302,7 @@ if __name__ == '__main__':
     import threading
 
     class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"Bot is running!")
+        do_GET = lambda self, *a: (self.send_response(200), self.end_headers(), self.wfile.write(b"Bot is running!"))
 
     port = int(os.environ.get("PORT", 8080))
     server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
