@@ -117,40 +117,37 @@ def fetch_live_traffic_from_panel():
     sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1]["count"], reverse=True)
     return sorted_ranges, total_hits
 
-def check_voltx_otp(order_id):
+def check_voltx_otp(target_phone, order_id):
     headers = {
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json"
     }
     
-    endpoints = [
-        f"{BASE_API_URL}/getotp?id={order_id}",
-        f"{BASE_API_URL}/status?id={order_id}",
-        f"{BASE_API_URL}/getnum?id={order_id}",
-        f"{BASE_API_URL}/console"
-    ]
-    
-    for url in endpoints:
-        try:
-            res = requests.get(url, headers=headers, timeout=2)
-            if res.status_code == 200:
-                data = res.json()
+    try:
+        # Documentation anujayi success-otp endpoint theke recent successful OTP gulo ana hoy[span_2](start_span)[span_2](end_span)
+        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=3)
+        if res.status_code == 200:
+            res_data = res.json()
+            if res_data.get("meta", {}).get("code") == 200:
+                otps = res_data.get("data", {}).get("otps", [])
+                clean_target = str(target_phone).replace("+", "").strip()
                 
-                if "console" in url and "hits" in data.get("data", {}):
-                    for hit in data["data"]["hits"]:
-                        if str(hit.get("id")) == str(order_id) or str(hit.get("rid")) in str(order_id):
-                            sms_code = hit.get("sms") or hit.get("code") or hit.get("otp")
-                            if sms_code and str(sms_code).upper() != "WAITING":
-                                return str(sms_code)
-                
-                sms_code = data.get("sms") or data.get("code") or data.get("otp") or data.get("text")
-                if not sms_code and isinstance(data.get("data"), dict):
-                    sms_code = data["data"].get("sms") or data["data"].get("code") or data["data"].get("otp") or data["data"].get("text")
-                
-                if sms_code and str(sms_code).upper() != "WAITING":
-                    return str(sms_code)
-        except Exception:
-            continue
+                for item in otps:
+                    num = str(item.get("number", "")).replace("+", "").strip()
+                    oid = str(item.get("otp_id", ""))
+                    msg = str(item.get("message", ""))
+                    
+                    # Number ba order id match korle msg theke code extract korbe
+                    if clean_target in num or (order_id and order_id in oid):
+                        import re
+                        # Message theke 4 theke 6 digit-er OTP code khuje ber korar jonno
+                        match = re.search(r'\b\d{4,6}\b', msg)
+                        if match:
+                            return match.group(0)
+                        elif msg:
+                            return msg
+    except Exception as e:
+        print(f"Success OTP API Error: {e}")
             
     return None
 
@@ -176,7 +173,7 @@ def create_number_markup(numbers_list):
 async def poll_for_otp(chat_id, order_id, phone, context):
     for _ in range(60): 
         await asyncio.sleep(4)
-        status = check_voltx_otp(order_id)
+        status = check_voltx_otp(phone, order_id)
         if status:
             otp_message = f"✅ **OTP Received!**\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
             await context.bot.send_message(chat_id=chat_id, text=otp_message, parse_mode="Markdown")
@@ -184,7 +181,7 @@ async def poll_for_otp(chat_id, order_id, phone, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️️ Set Range"],
+        ["📞 Get API Number", "⚙️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
@@ -257,7 +254,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _, _, flag = get_country_info(r)
                 traffic_lines.append(f"• {flag} `{r}` - {info['sid']} - {info['count']}")
         else:
-            traffic_lines.append("⚠️️ No active ranges found right now.")
+            traffic_lines.append("⚠️ No active ranges found right now.")
         
         traffic_lines.append("\n⚡ Copy a range and use **⚙️ Set Range** to target it!")
         await update.message.reply_text("\n".join(traffic_lines), parse_mode="Markdown")
