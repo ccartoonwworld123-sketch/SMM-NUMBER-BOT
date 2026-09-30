@@ -16,19 +16,27 @@ USER_RANGES = {}
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
     if clean_num.startswith("237"):
-        return "Cameroon", "cm"
+        return "Cameroon", "CM", "🇨🇲"
     elif clean_num.startswith("225"):
-        return "Ivory Coast", "ci"
+        return "Ivory Coast", "CI", "🇨🇮"
     elif clean_num.startswith("228"):
-        return "Togo", "tg"
+        return "Togo", "TG", "🇹🇬"
     elif clean_num.startswith("229"):
-        return "Benin", "bj"
+        return "Benin", "BJ", "🇧🇯"
     elif clean_num.startswith("255"):
-        return "Tanzania", "tz"
+        return "Tanzania", "TZ", "🇹🇿"
     elif clean_num.startswith("266"):
-        return "Lesotho", "ls"
+        return "Lesotho", "LS", "🇱🇸"
+    elif clean_num.startswith("380"):
+        return "Ukraine", "UA", "🇺🇦"
+    elif clean_num.startswith("224"):
+        return "Guinea", "GN", "🇬🇳"
+    elif clean_num.startswith("266"):
+        return "Lesotho", "LS", "🇱🇸"
+    elif clean_num.startswith("996"):
+        return "Kyrgyzstan", "KG", "🇰🇬"
     else:
-        return "Togo", "tg"
+        return "Togo", "TG", "🇹🇬"
 
 def get_voltx_real_number(target_range="22896"):
     headers = {
@@ -48,7 +56,7 @@ def get_voltx_real_number(target_range="22896"):
             if meta.get("code") == 200:
                 data = res_data.get("data", {})
                 phone = data.get("full_number") or data.get("national_number")
-                order_id = res_data.get("id") or data.get("id") or res_data.get("rid")  or clean_rid
+                order_id = res_data.get("id") or data.get("id") or res_data.get("rid") or clean_rid
                 if phone:
                     return str(phone), str(order_id)
     except Exception as e:
@@ -64,7 +72,6 @@ def fetch_live_traffic_from_panel():
     range_counts = {}
     total_hits = 0
     
-    # কনসোল থেকে লাইভ হিটস এনে কাউন্ট এবং সর্টিং করা হচ্ছে
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=6)
         if res.status_code == 200:
@@ -74,17 +81,18 @@ def fetch_live_traffic_from_panel():
                 total_hits = len(hits)
                 for hit in hits:
                     r = hit.get("range")
-                    sid = hit.get("sid", "FB")
+                    sid = hit.get("sid", "FACEBOOK")
+                    if sid.upper() == "FB":
+                        sid = "FACEBOOK"
                     if r:
                         clean_r = str(r).strip()
                         if clean_r in range_counts:
                             range_counts[clean_r]["count"] += 1
                         else:
-                            range_counts[clean_r] = {"sid": sid, "count": 1}
+                            range_counts[clean_r] = {"sid": sid.upper(), "count": 1}
     except Exception as e:
         print(f"Console API Error: {e}")
 
-    # যদি কনসোল থেকে না আসে, তবে লাইভ অ্যাক্সেস ট্রাই করবে
     if not range_counts:
         try:
             res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=6)
@@ -93,18 +101,19 @@ def fetch_live_traffic_from_panel():
                 if res_data.get("meta", {}).get("code") == 200:
                     services = res_data.get("data", {}).get("services", [])
                     for s in services:
-                        sid = s.get("id", "FB")
+                        sid = s.get("id", "FACEBOOK")
+                        if sid.upper() == "FB":
+                            sid = "FACEBOOK"
                         for r in s.get("ranges", []):
                             clean_r = str(r).strip()
                             if clean_r in range_counts:
                                 range_counts[clean_r]["count"] += 1
                             else:
-                                range_counts[clean_r] = {"sid": sid, "count": 1}
+                                range_counts[clean_r] = {"sid": sid.upper(), "count": 1}
                     total_hits = sum(item["count"] for item in range_counts.values())
         except Exception as e:
             print(f"Liveaccess API Error: {e}")
 
-    # যে রেঞ্জে বেশি হিট রয়েছে তা সবার উপরে সাজানো (Descending Order)
     sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1]["count"], reverse=True)
     return sorted_ranges, total_hits
 
@@ -169,7 +178,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
+    if text in ["📞 Get API Number", "⚙️️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
         USER_STATES[user_id] = None
 
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
@@ -202,8 +211,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Check **🟢 Live Traffic**.", parse_mode="Markdown")
             return
 
-        country_name, _ = get_country_info(numbers[0])
-        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}\n\n⏳ Waiting for OTP..."
+        country_name, _, _ = get_country_info(numbers[0])
+        header_text = f"🌐 Country : {country_name}\n⚙️️ Range : {user_range}\n\n⏳ Waiting for OTP..."
         
         reply_markup = create_number_markup(numbers, user_range)
         await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
@@ -227,11 +236,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if sorted_ranges:
             top_r, top_info = sorted_ranges[0]
-            traffic_lines.append(f"👑 **Top Range:** `{top_r}` - {top_info['sid']}")
+            _, _, top_flag = get_country_info(top_r)
+            traffic_lines.append(f"👑 **Top Range:** {top_flag} `{top_r}` - {top_info['sid']}")
             traffic_lines.append("\n📥 **Range List**")
             
             for r, info in sorted_ranges:
-                traffic_lines.append(f"• `{r}` - {info['sid']} - {info['count']}")
+                _, _, flag = get_country_info(r)
+                traffic_lines.append(f"• {flag} `{r}` - {info['sid']} - {info['count']}")
         else:
             traffic_lines.append("⚠️ No active ranges found right now.")
         
@@ -278,7 +289,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ No real numbers available in panel for range `{user_range}` right now.")
             return
 
-        country_name, _ = get_country_info(numbers[0])
+        country_name, _, _ = get_country_info(numbers[0])
         header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}\n\n⏳ Waiting for OTP..."
         
         reply_markup = create_number_markup(numbers, user_range)
