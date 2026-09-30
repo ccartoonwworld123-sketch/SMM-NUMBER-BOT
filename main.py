@@ -16,9 +16,10 @@ USER_RANGES = {}
 
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
-    if clean_num.startswith("237"): return "Cameroon", "CM", "🇨🇲"
+    
+    if clean_num.startswith("228"): return "Togo", "TG", "🇹🇬"
     elif clean_num.startswith("225"): return "Ivory Coast", "CI", "🇨🇮"
-    elif clean_num.startswith("228"): return "Togo", "TG", "🇨🇮"
+    elif clean_num.startswith("237"): return "Cameroon", "CM", "🇨🇲"
     elif clean_num.startswith("229"): return "Benin", "BJ", "🇧🇯"
     elif clean_num.startswith("255"): return "Tanzania", "TZ", "🇹🇿"
     elif clean_num.startswith("266"): return "Lesotho", "LS", "🇱🇸"
@@ -26,7 +27,10 @@ def get_country_info(phone_number):
     elif clean_num.startswith("224"): return "Guinea", "GN", "🇬🇳"
     elif clean_num.startswith("996"): return "Kyrgyzstan", "KG", "🇰🇬"
     elif clean_num.startswith("43"): return "Austria", "AT", "🇦🇹"
-    else: return "Togo", "TG", "🇹🇬"
+    elif clean_num.startswith("39"): return "Italy", "IT", "🇮🇹"
+    elif clean_num.startswith("880"): return "Bangladesh", "BD", "🇧🇩"
+    elif clean_num.startswith("91"): return "India", "IN", "🇮🇳"
+    else: return "International", "INT", "🌍"
 
 def _sync_get_voltx_real_number(target_range):
     headers = {
@@ -86,17 +90,14 @@ def _sync_check_voltx_otp(target_phone, order_id):
     clean_target = ''.join(filter(str.isdigit, str(target_phone)))
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
-    # 1. Debugging er jonno console response print korbe
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
             res_json = res.json()
-            # Pura response terminal-e dekhaben jodi code na ase
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
             if isinstance(hits, list):
                 for hit in hits:
                     if not isinstance(hit, dict): continue
-                    # Sob possible keys check korbe
                     num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
                     msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", ""))
                     
@@ -111,7 +112,6 @@ def _sync_check_voltx_otp(target_phone, order_id):
     except Exception as e:
         print(f"Console Check Error: {e}")
 
-    # 2. Success-otp endpoint check
     try:
         res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
         if res.status_code == 200:
