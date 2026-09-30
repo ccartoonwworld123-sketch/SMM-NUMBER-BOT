@@ -4,8 +4,8 @@ import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# Telegram Bot Token (আপডেট করা নতুন টোকেন)
-BOT_TOKEN = "8752686767:AAGLut2j5_JitJDuIWhBiXCVAxVcGq93ax0"
+# Telegram Bot Token (Environment Variable system)
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 def get_3_numbers():
     return [f"+22507{random.randint(10000000, 99999999)}" for _ in range(3)]
@@ -84,4 +84,3 @@ if __name__ == '__main__':
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
     app.run_polling()
-
