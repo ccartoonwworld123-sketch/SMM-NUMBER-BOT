@@ -124,7 +124,6 @@ def check_voltx_otp(target_phone, order_id):
     }
     
     try:
-        # Documentation anujayi success-otp endpoint theke recent successful OTP gulo ana hoy[span_2](start_span)[span_2](end_span)
         res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=3)
         if res.status_code == 200:
             res_data = res.json()
@@ -137,10 +136,8 @@ def check_voltx_otp(target_phone, order_id):
                     oid = str(item.get("otp_id", ""))
                     msg = str(item.get("message", ""))
                     
-                    # Number ba order id match korle msg theke code extract korbe
                     if clean_target in num or (order_id and order_id in oid):
                         import re
-                        # Message theke 4 theke 6 digit-er OTP code khuje ber korar jonno
                         match = re.search(r'\b\d{4,6}\b', msg)
                         if match:
                             return match.group(0)
@@ -175,13 +172,21 @@ async def poll_for_otp(chat_id, order_id, phone, context):
         await asyncio.sleep(4)
         status = check_voltx_otp(phone, order_id)
         if status:
-            otp_message = f"✅ **OTP Received!**\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
-            await context.bot.send_message(chat_id=chat_id, text=otp_message, parse_mode="Markdown")
+            otp_message = f"🚨 **NEW OTP RECEIVED!** 🚨\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
+            try:
+                await context.bot.send_message(
+                    chat_id=chat_id, 
+                    text=otp_message, 
+                    parse_mode="Markdown",
+                    disable_notification=False
+                )
+            except Exception as e:
+                print(f"Notification Error: {e}")
             return
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️ Set Range"],
+        ["📞 Get API Number", "⚙️️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
