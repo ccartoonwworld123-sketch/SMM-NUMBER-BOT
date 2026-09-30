@@ -1,7 +1,7 @@
 import os
 import asyncio
 import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, CopyTextButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
@@ -149,9 +149,14 @@ def create_number_markup(numbers_list):
     keyboard = []
     for num in numbers_list:
         _, _, flag = get_country_info(num)
-        # আপনার স্ক্রিনশটের কাঙ্ক্ষিত URL স্কিম ফরম্যাট
-        copy_url = f"https://t.me/share/url?url={num}"
-        keyboard.append([InlineKeyboardButton(f"📋 {flag} {num}", url=copy_url)])
+        # অতিরিক্ত ইমোজি সরিয়ে শুধু ফ্লাগ এবং নাম্বার রাখা হলো, টেলিগ্রাম নিজে থেকেই কপি বাটন আইকন যুক্ত করবে
+        button_text = f"{flag} {num}"
+        keyboard.append([
+            InlineKeyboardButton(
+                text=button_text,
+                copy_text=CopyTextButton(text=num)
+            )
+        ])
     
     keyboard.append([
         InlineKeyboardButton("🔔 OTP GROUP", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}"),
