@@ -41,7 +41,7 @@ def get_voltx_real_number(target_range="22896"):
     payload = {"rid": clean_rid}
     
     try:
-        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=8)
+        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=6)
         if res.status_code == 200:
             res_data = res.json()
             meta = res_data.get("meta", {})
@@ -56,18 +56,36 @@ def get_voltx_real_number(target_range="22896"):
 
     return None, None
 
+def extract_all_ranges(data, found_set):
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if k.lower() in ["rid", "range", "prefix"] and isinstance(v, (str, int)):
+                found_set.add(str(v))
+            else:
+                extract_all_ranges(v, found_set)
+    elif isinstance(data, list):
+        for item in data:
+            extract_all_ranges(item, found_set)
+    elif isinstance(data, (str, int)) and str(data).isdigit() and len(str(data)) >= 4:
+        found_set.add(str(data))
+
 def fetch_live_traffic_from_panel():
     headers = {
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json"
     }
     try:
-        res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=8)
+        res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=6)
         if res.status_code == 200:
             res_data = res.json()
             meta = res_data.get("meta", {})
             if meta.get("code") == 200:
-                return res_data.get("data")
+                data = res_data.get("data")
+                ranges = set()
+                extract_all_ranges(data, ranges)
+                if ranges:
+                    return list(ranges)
+                return data
     except Exception as e:
         print(f"Live Traffic API Error: {e}")
     return None
@@ -86,7 +104,7 @@ def check_voltx_otp(order_id):
     
     for url in endpoints:
         try:
-            res = requests.get(url, headers=headers, timeout=8)
+            res = requests.get(url, headers=headers, timeout=5)
             if res.status_code == 200:
                 data = res.json()
                 sms_code = data.get("sms") or data.get("code") or data.get("otp") or data.get("text")
@@ -103,7 +121,6 @@ def check_voltx_otp(order_id):
 def create_number_markup(numbers_list, user_range):
     keyboard = []
     for num in numbers_list:
-        # স্ক্রিনশটের মতো কপি বাটন ডিজাইন
         keyboard.append([InlineKeyboardButton(f"📋  {num}", callback_data=f"copy_{num}")])
     
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
@@ -161,7 +178,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 numbers.append(p)
                 if oid:
                     orders.append((p, oid))
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.1)
 
         if not numbers:
             await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Check **🟢 Live Traffic**.", parse_mode="Markdown")
@@ -189,9 +206,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if traffic_data:
             if isinstance(traffic_data, list):
                 for item in traffic_data:
-                    r_code = str(item.get("rid") or item.get("range") or "N/A")
-                    c_name, _ = get_country_info(r_code)
-                    traffic_lines.append(f"🌐 `{r_code}` | {c_name}")
+                    c_name, _ = get_country_info(str(item))
+                    traffic_lines.append(f"🌐 `{item}` | {c_name}")
             elif isinstance(traffic_data, dict):
                 for r_code, info in traffic_data.items():
                     c_name, _ = get_country_info(str(r_code))
@@ -220,7 +236,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if query.data.startswith("copy_"):
         copied_num = query.data.replace("copy_", "")
-        await query.answer(f"✅ Number Copied: {copied_num}", show_alert=True)
+        # show_alert=False করার ফলে এখন আর বিরক্তিকর OK পপআপ আসবে না, শুধু ছোট টোস্ট দেখাবে
+        await query.answer(f"✅ Copied: {copied_num}", show_alert=False)
         return
 
     await query.answer()
@@ -238,7 +255,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 numbers.append(p)
                 if oid:
                     orders.append((p, oid))
-            await asyncio.sleep(0.3)
+            await asyncio.sleep(0.1)
 
         if not numbers:
             await query.message.reply_text(f"❌ No real numbers available in panel for range `{user_range}` right now.")
