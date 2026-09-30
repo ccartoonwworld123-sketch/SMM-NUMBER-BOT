@@ -74,19 +74,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup = create_number_markup(nums)
         await update.message.reply_text(header_text, reply_markup=reply_markup)
 
-    elif text == "📊 Live Traffic":
-        await update.message.reply_text("📊 Live Traffic: All servers active!")
+      elif text == "📊 Live Traffic":
+        await update.message.reply_text("📊 Live Traffic: All systems operational.")
 
     elif text == "👤 My Profile":
-        await update.message.reply_text(f"👤 Profile: {update.effective_user.first_name}\nBalance: 0.00৳")
+        await update.message.reply_text(f"👤 Profile: {update.effective_user.first_name}")
 
     elif text == "🎪 Leaderboard":
-        await update.message.reply_text("🎪 Leaderboard: No data yet.")
+        await update.message.reply_text("🎪 Leaderboard: No active rankings.")
 
-    elif text == "🔒 Support":elif text == "🔓 Support":
-    await update.message.reply_text("সাপোর্টের জন্য যোগাযোগ করুন: https://t.me/smmsaport")
-
-        await update.message.reply_text("🔒 Support: Contact Admin.")
+    elif text == "🔓 Support":
+        await update.message.reply_text("সাপোর্টের জন্য যোগাযোগ করুন: https://t.me/smmsaport")
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
