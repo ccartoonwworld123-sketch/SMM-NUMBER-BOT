@@ -37,7 +37,8 @@ def get_voltx_real_number(target_range="22896"):
         "Content-Type": "application/json"
     }
     
-    clean_rid = str(target_range).lower().replace("x", "").strip()
+    # XXX বা অতিরিক্ত কিছু থাকলে তা বাদ দিয়ে শুধু মূল রেঞ্জ আইডি পাঠানো হচ্ছে[span_12](start_span)[span_12](end_span)[span_13](start_span)[span_13](end_span)
+    clean_rid = str(target_range).upper().replace("XXX", "").replace("X", "").strip()
     payload = {"rid": clean_rid}
     
     try:
@@ -56,42 +57,46 @@ def get_voltx_real_number(target_range="22896"):
 
     return None, None
 
-def extract_all_ranges(data, found_set):
-    if isinstance(data, dict):
-        for k, v in data.items():
-            if k.lower() in ["rid", "range", "prefix"] and isinstance(v, (str, int)):
-                val_str = str(v).strip()
-                if 3 <= len(val_str) <= 6:  # শুধু ছোট ও সঠিক রেঞ্জ আইডিগুলো ফিল্টার করবে
-                    found_set.add(val_str)
-            else:
-                extract_all_ranges(v, found_set)
-    elif isinstance(data, list):
-        for item in data:
-            if isinstance(item, (str, int)) and 3 <= len(str(item)) <= 6:
-                found_set.add(str(item))
-            else:
-                extract_all_ranges(item, found_set)
-
 def fetch_live_traffic_from_panel():
     headers = {
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json"
     }
+    ranges_list = []
+    
+    # API ডকুমেন্টেশন অনুযায়ী সরাসরি /console এন্ডপয়েন্ট থেকে আসল রেঞ্জগুলো ফেচ করা হচ্ছে[span_14](start_span)[span_14](end_span)
     try:
-        res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=6)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=6)
         if res.status_code == 200:
             res_data = res.json()
-            meta = res_data.get("meta", {})
-            if meta.get("code") == 200:
-                data = res_data.get("data")
-                ranges = set()
-                extract_all_ranges(data, ranges)
-                if ranges:
-                    return list(ranges)
-                return data
+            if res_data.get("meta", {}).get("code") == 200:
+                hits = res_data.get("data", {}).get("hits", [])
+                for hit in hits:
+                    r = hit.get("range")
+                    if r:
+                        clean_r = str(r).replace("XXX", "").strip()
+                        if clean_r not in ranges_list:
+                            ranges_list.append(clean_r)
     except Exception as e:
-        print(f"Live Traffic API Error: {e}")
-    return None
+        print(f"Console API Error: {e}")
+
+    # যদি কনসোল থেকে না পাওয়া যায়, তবে /liveaccess ট্রাই করবে[span_15](start_span)[span_15](end_span)
+    if not ranges_list:
+        try:
+            res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=6)
+            if res.status_code == 200:
+                res_data = res.json()
+                if res_data.get("meta", {}).get("code") == 200:
+                    services = res_data.get("data", {}).get("services", [])
+                    for s in services:
+                        for r in s.get("ranges", []):
+                            clean_r = str(r).replace("XXX", "").strip()
+                            if clean_r not in ranges_list:
+                                ranges_list.append(clean_r)
+        except Exception as e:
+            print(f"Liveaccess API Error: {e}")
+
+    return ranges_list
 
 def check_voltx_otp(order_id):
     headers = {
@@ -202,23 +207,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "🟢 Live Traffic":
         await update.message.reply_text("⏳ Fetching live traffic directly from Voltx panel...")
-        traffic_data = fetch_live_traffic_from_panel()
+        traffic_ranges = fetch_live_traffic_from_panel()
         
         traffic_lines = ["📊 **PANEL LIVE TRAFFIC & RANGES**\n"]
         
-        if traffic_data:
-            if isinstance(traffic_data, list):
-                for item in traffic_data:
-                    c_name, _ = get_country_info(str(item))
-                    traffic_lines.append(f"🌐 `{item}` | {c_name}")
-            elif isinstance(traffic_data, dict):
-                for r_code, info in traffic_data.items():
-                    c_name, _ = get_country_info(str(r_code))
-                    traffic_lines.append(f"🌐 `{r_code}` | {c_name}")
-            else:
-                traffic_lines.append(f"`{traffic_data}`")
+        if traffic_ranges:
+            for item in traffic_ranges:
+                c_name, _ = get_country_info(str(item))
+                traffic_lines.append(f"🌐 `{item}` | {c_name}")
         else:
-            traffic_lines.append("⚠️ Could not fetch live list automatically right now.")
+            traffic_lines.append("⚠️ No active ranges found right now.")
         
         traffic_lines.append("\n⚡ Copy a range and use **⚙️ Set Range** to target it!")
         await update.message.reply_text("\n".join(traffic_lines), parse_mode="Markdown")
