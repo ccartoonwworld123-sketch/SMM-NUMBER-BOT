@@ -1,5 +1,4 @@
 import os
-import random
 import asyncio
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
@@ -44,29 +43,28 @@ def get_country_info(phone_number):
     else:
         return "🇨🇮 IVORY COAST (CI)", "ci"
 
-def get_voltx_number(service="fb", country="tg"):
+def get_voltx_real_number(service="fb", country="tg"):
+    """Strictly fetches real numbers from VoltxSMS API without any fake/random generation"""
     headers = {
         "Authorization": f"Bearer {VOLTX_API_KEY}",
         "Accept": "application/json"
     }
     
-    urls = [
-        "https://voltxsms.com/api/v1/getNumber",
-        "https://voltxsms.com/api/getNumber",
-        "https://voltxsms.com/api/buy"
+    endpoints = [
+        f"https://voltxsms.com/api/v1/getNumber?service={service}&country={country}",
+        f"https://voltxsms.com/api/getNumber?api_key={VOLTX_API_KEY}&service={service}&country={country}",
+        f"https://voltxsms.com/api/buy?apiKey={VOLTX_API_KEY}&service={service}&country={country}"
     ]
     
-    params = {"service": service, "country": country}
-    
-    for url in urls:
+    for url in endpoints:
         try:
-            res = requests.get(url, headers=headers, params=params, timeout=5)
+            res = requests.get(url, headers=headers, timeout=8)
             if res.status_code == 200:
                 data = res.json()
-                phone = data.get("number") or data.get("phone")
-                order_id = data.get("id") or data.get("order_id")
+                phone = data.get("number") or data.get("phone") or data.get("phoneNumber")
+                order_id = data.get("id") or data.get("order_id") or data.get("orderId")
                 if phone:
-                    return phone, order_id
+                    return str(phone), order_id
         except Exception:
             continue
 
@@ -79,11 +77,12 @@ def check_voltx_otp(order_id):
     }
     try:
         url = f"https://voltxsms.com/api/v1/getOtp?id={order_id}"
-        res = requests.get(url, headers=headers, timeout=5)
+        res = requests.get(url, headers=headers, timeout=8)
         if res.status_code == 200:
             data = res.json()
-            if data.get("sms") or data.get("code"):
-                return data.get("sms") or data.get("code")
+            sms_code = data.get("sms") or data.get("code") or data.get("otp")
+            if sms_code and sms_code != "WAITING":
+                return sms_code
     except Exception:
         pass
     return None
@@ -100,20 +99,13 @@ def create_multi_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
-    for _ in range(24):
+    for _ in range(30):
         await asyncio.sleep(5)
         status = check_voltx_otp(order_id)
-        if status and status != "WAITING":
+        if status:
             otp_message = f"✅ **Facebook OTP Received!**\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
             await context.bot.send_message(chat_id=chat_id, text=otp_message, parse_mode="Markdown")
             return
-
-def generate_fallback_numbers(clean_prefix, count=3):
-    numbers = []
-    for _ in range(count):
-        random_suffix = "".join([str(random.randint(0, 9)) for _ in range(5)])
-        numbers.append(f"+{clean_prefix}{random_suffix}")
-    return numbers
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
@@ -128,7 +120,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    # Command or Button options check
     if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
         USER_STATES[user_id] = None
 
@@ -143,7 +134,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == "📞 Get API Number":
-        await update.message.reply_text("⏳ Requesting numbers from Voltx Panel...")
+        await update.message.reply_text("⏳ Requesting real numbers from Voltx Panel...")
         
         user_range = USER_RANGES.get(user_id, "22896")
         clean_prefix = user_range.lower().replace("x", "")
@@ -152,19 +143,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         numbers = []
         orders = []
 
-        # Try to get API numbers first
+        # Fetch only actual numbers from API (up to 3)
         for _ in range(3):
-            p, oid = get_voltx_number(service="fb", country=country_code)
-            if p:
+            p, oid = get_voltx_real_number(service="fb", country=country_code)
+            if p and p not in numbers:
                 numbers.append(p)
                 if oid:
                     orders.append((p, oid))
+            await asyncio.sleep(0.3)
 
-        # Fallback if API stock is low
-        if len(numbers) < 3:
-            needed = 3 - len(numbers)
-            fallback_nums = generate_fallback_numbers(clean_prefix, needed)
-            numbers.extend(fallback_nums)
+        if not numbers:
+            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel currently has no stock for range `{user_range}`. Please select another range from **🟢 Live Traffic**.", parse_mode="Markdown")
+            return
 
         num_text = "\n".join([f"📱 `{p}`" for p in numbers])
         country_display, _ = get_country_info(numbers[0])
@@ -215,16 +205,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         orders = []
 
         for _ in range(3):
-            p, oid = get_voltx_number(service="fb", country=country_code)
-            if p:
+            p, oid = get_voltx_real_number(service="fb", country=country_code)
+            if p and p not in numbers:
                 numbers.append(p)
                 if oid:
                     orders.append((p, oid))
+            await asyncio.sleep(0.3)
 
-        if len(numbers) < 3:
-            needed = 3 - len(numbers)
-            fallback_nums = generate_fallback_numbers(clean_prefix, needed)
-            numbers.extend(fallback_nums)
+        if not numbers:
+            await query.message.reply_text(f"❌ No real numbers available in panel for range `{user_range}` right now.")
+            return
 
         num_text = "\n".join([f"📱 `{p}`" for p in numbers])
         country_display, _ = get_country_info(numbers[0])
