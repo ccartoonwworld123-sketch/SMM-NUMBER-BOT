@@ -37,7 +37,6 @@ def get_voltx_real_number(target_range="22896"):
         "Content-Type": "application/json"
     }
     
-    # XXX বা অতিরিক্ত কিছু থাকলে তা বাদ দিয়ে শুধু মূল রেঞ্জ আইডি পাঠানো হচ্ছে[span_12](start_span)[span_12](end_span)[span_13](start_span)[span_13](end_span)
     clean_rid = str(target_range).upper().replace("XXX", "").replace("X", "").strip()
     payload = {"rid": clean_rid}
     
@@ -49,7 +48,7 @@ def get_voltx_real_number(target_range="22896"):
             if meta.get("code") == 200:
                 data = res_data.get("data", {})
                 phone = data.get("full_number") or data.get("national_number")
-                order_id = res_data.get("id") or data.get("id") or res_data.get("rid") or clean_rid
+                order_id = res_data.get("id") or data.get("id") or res_data.get("rid")  or clean_rid
                 if phone:
                     return str(phone), str(order_id)
     except Exception as e:
@@ -62,26 +61,31 @@ def fetch_live_traffic_from_panel():
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json"
     }
-    ranges_list = []
+    range_counts = {}
+    total_hits = 0
     
-    # API ডকুমেন্টেশন অনুযায়ী সরাসরি /console এন্ডপয়েন্ট থেকে আসল রেঞ্জগুলো ফেচ করা হচ্ছে[span_14](start_span)[span_14](end_span)
+    # কনসোল থেকে লাইভ হিটস এনে কাউন্ট এবং সর্টিং করা হচ্ছে
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=6)
         if res.status_code == 200:
             res_data = res.json()
             if res_data.get("meta", {}).get("code") == 200:
                 hits = res_data.get("data", {}).get("hits", [])
+                total_hits = len(hits)
                 for hit in hits:
                     r = hit.get("range")
+                    sid = hit.get("sid", "FB")
                     if r:
-                        clean_r = str(r).replace("XXX", "").strip()
-                        if clean_r not in ranges_list:
-                            ranges_list.append(clean_r)
+                        clean_r = str(r).strip()
+                        if clean_r in range_counts:
+                            range_counts[clean_r]["count"] += 1
+                        else:
+                            range_counts[clean_r] = {"sid": sid, "count": 1}
     except Exception as e:
         print(f"Console API Error: {e}")
 
-    # যদি কনসোল থেকে না পাওয়া যায়, তবে /liveaccess ট্রাই করবে[span_15](start_span)[span_15](end_span)
-    if not ranges_list:
+    # যদি কনসোল থেকে না আসে, তবে লাইভ অ্যাক্সেস ট্রাই করবে
+    if not range_counts:
         try:
             res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=6)
             if res.status_code == 200:
@@ -89,14 +93,20 @@ def fetch_live_traffic_from_panel():
                 if res_data.get("meta", {}).get("code") == 200:
                     services = res_data.get("data", {}).get("services", [])
                     for s in services:
+                        sid = s.get("id", "FB")
                         for r in s.get("ranges", []):
-                            clean_r = str(r).replace("XXX", "").strip()
-                            if clean_r not in ranges_list:
-                                ranges_list.append(clean_r)
+                            clean_r = str(r).strip()
+                            if clean_r in range_counts:
+                                range_counts[clean_r]["count"] += 1
+                            else:
+                                range_counts[clean_r] = {"sid": sid, "count": 1}
+                    total_hits = sum(item["count"] for item in range_counts.values())
         except Exception as e:
             print(f"Liveaccess API Error: {e}")
 
-    return ranges_list
+    # যে রেঞ্জে বেশি হিট রয়েছে তা সবার উপরে সাজানো (Descending Order)
+    sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1]["count"], reverse=True)
+    return sorted_ranges, total_hits
 
 def check_voltx_otp(order_id):
     headers = {
@@ -207,14 +217,21 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "🟢 Live Traffic":
         await update.message.reply_text("⏳ Fetching live traffic directly from Voltx panel...")
-        traffic_ranges = fetch_live_traffic_from_panel()
+        sorted_ranges, total_hits = fetch_live_traffic_from_panel()
         
-        traffic_lines = ["📊 **PANEL LIVE TRAFFIC & RANGES**\n"]
+        traffic_lines = [
+            "📊 **Live Trafic**\n",
+            f"📋 **Total OTP:** {total_hits}",
+            f"⏱ **Record:** Last 15 Minutes"
+        ]
         
-        if traffic_ranges:
-            for item in traffic_ranges:
-                c_name, _ = get_country_info(str(item))
-                traffic_lines.append(f"🌐 `{item}` | {c_name}")
+        if sorted_ranges:
+            top_r, top_info = sorted_ranges[0]
+            traffic_lines.append(f"👑 **Top Range:** `{top_r}` - {top_info['sid']}")
+            traffic_lines.append("\n📥 **Range List**")
+            
+            for r, info in sorted_ranges:
+                traffic_lines.append(f"• `{r}` - {info['sid']} - {info['count']}")
         else:
             traffic_lines.append("⚠️ No active ranges found right now.")
         
