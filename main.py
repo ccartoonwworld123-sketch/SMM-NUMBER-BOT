@@ -43,7 +43,7 @@ def _sync_get_voltx_real_number(target_range):
     clean_rid = str(target_range).upper().replace("XXX", "").replace("X", "").strip()
     payload = {"rid": clean_rid}
     try:
-        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=3)
+        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=2)
         if res.status_code == 200:
             res_data = res.json()
             data = res_data.get("data", {})
@@ -63,7 +63,7 @@ def _sync_fetch_live_traffic():
     range_counts = {}
     total_hits = 0
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
             res_json = res.json()
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
@@ -93,7 +93,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=1.5)
         if res.status_code == 200:
             res_json = res.json()
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
@@ -115,7 +115,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
         print(f"Console Check Error: {e}")
 
     try:
-        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
+        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=1.5)
         if res.status_code == 200:
             res_json = res.json()
             otps = res_json.get("data", {}).get("otps", []) or res_json.get("data", []) or res_json.get("otps", [])
@@ -156,8 +156,8 @@ def create_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
-    for _ in range(300): 
-        await asyncio.sleep(1) 
+    for _ in range(600): 
+        await asyncio.sleep(0.5) 
         try:
             status = await check_voltx_otp(phone, order_id)
             if status:
@@ -173,7 +173,7 @@ async def poll_for_otp(chat_id, order_id, phone, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️️ Set Range"],
+        ["📞 Get API Number", "⚙️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
