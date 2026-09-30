@@ -42,22 +42,23 @@ def get_voltx_real_number(target_range="22896"):
     
     try:
         res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=8)
+        print(f"GetNum Response: {res.status_code} | Text: {res.text}")
         if res.status_code == 200:
             res_data = res.json()
             meta = res_data.get("meta", {})
             if meta.get("code") == 200:
                 data = res_data.get("data", {})
                 phone = data.get("full_number") or data.get("national_number")
-                order_id = res_data.get("rid") or clean_rid
+                # Extracting the correct unique transaction/order ID from response
+                order_id = res_data.get("id") or data.get("id") or res_data.get("rid") or clean_rid
                 if phone:
-                    return str(phone), order_id
+                    return str(phone), str(order_id)
     except Exception as e:
         print(f"API Error: {e}")
 
     return None, None
 
 def fetch_live_traffic_from_panel():
-    """Fetches live access traffic ranges directly from Voltx panel API"""
     headers = {
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json"
@@ -68,12 +69,9 @@ def fetch_live_traffic_from_panel():
             res_data = res.json()
             meta = res_data.get("meta", {})
             if meta.get("code") == 200:
-                # Returns list or dict of live ranges from panel
-                data = res_data.get("data")
-                return data
+                return res_data.get("data")
     except Exception as e:
         print(f"Live Traffic API Error: {e}")
-    
     return None
 
 def check_voltx_otp(order_id):
@@ -81,22 +79,35 @@ def check_voltx_otp(order_id):
         "mauthapi": VOLTX_API_KEY,
         "Accept": "application/json"
     }
-    try:
-        url = f"{BASE_API_URL}/getotp?id={order_id}"
-        res = requests.get(url, headers=headers, timeout=8)
-        if res.status_code == 200:
-            data = res.json()
-            sms_code = data.get("sms") or data.get("code") or data.get("otp")
-            if sms_code and sms_code != "WAITING":
-                return sms_code
-    except Exception:
-        pass
+    
+    endpoints = [
+        f"{BASE_API_URL}/getotp?id={order_id}",
+        f"{BASE_API_URL}/status?id={order_id}",
+        f"{BASE_API_URL}/getnum?id={order_id}"
+    ]
+    
+    for url in endpoints:
+        try:
+            res = requests.get(url, headers=headers, timeout=8)
+            if res.status_code == 200:
+                data = res.json()
+                # Checking various possible keys for OTP/SMS in panel response
+                sms_code = data.get("sms") or data.get("code") or data.get("otp") or data.get("text")
+                if not sms_code and isinstance(data.get("data"), dict):
+                    sms_code = data["data"].get("sms") or data["data"].get("code") or data["data"].get("otp")
+                
+                if sms_code and str(sms_code).upper() != "WAITING":
+                    return str(sms_code)
+        except Exception:
+            continue
+            
     return None
 
 def create_multi_number_markup(numbers_list):
     keyboard = []
     for num in numbers_list:
-        keyboard.append([InlineKeyboardButton(f"👤 📋 {num}", callback_data=f"num_{num}")])
+        # Clicking this button will show a popup alert with the number for easy copying
+        keyboard.append([InlineKeyboardButton(f"👤 📋 {num}", callback_data=f"copy_{num}")])
     
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
     keyboard.append([InlineKeyboardButton("🌐 Change Country", callback_data="change_country")])
@@ -105,7 +116,8 @@ def create_multi_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
-    for _ in range(30):
+    print(f"Started polling for OTP | Order ID: {order_id} | Phone: {phone}")
+    for _ in range(60): # Polling for 5 minutes (60 * 5s)
         await asyncio.sleep(5)
         status = check_voltx_otp(order_id)
         if status:
@@ -180,7 +192,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         traffic_lines = ["📊 **PANEL LIVE TRAFFIC & RANGES**\n"]
         
         if traffic_data:
-            # If data is returned as list or dict from panel
             if isinstance(traffic_data, list):
                 for item in traffic_data:
                     r_code = str(item.get("rid") or item.get("range") or "N/A")
@@ -202,7 +213,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         balance_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw_binance")],
             [InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
-            [InlineKeyboardButton("📣 OTP Group ↗️", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
+            [InlineKeyboardButton("📣 OTP Group ↗️️", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
         ])
         await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
 
@@ -211,6 +222,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    
+    # Handle direct copy button click
+    if query.data.startswith("copy_"):
+        copied_num = query.data.replace("copy_", "")
+        await query.answer(f"✅ Number Copied: {copied_num}", show_alert=True)
+        return
+
     await query.answer()
 
     if query.data == "change_number":
