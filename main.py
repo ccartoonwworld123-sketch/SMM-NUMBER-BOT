@@ -13,19 +13,6 @@ YOUR_TELEGRAM_USERNAME = "smmsaport"
 USER_STATES = {}
 USER_RANGES = {}
 
-LIVE_RANGES = [
-    ("23762", 37),
-    ("237622", 25),
-    ("237620", 13),
-    ("225072", 10),
-    ("22896", 7),
-    ("2290163", 6),
-    ("26661", 6),
-    ("22897", 4),
-    ("25567", 4),
-    ("22890", 3),
-]
-
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
     if clean_num.startswith("237"):
@@ -51,25 +38,10 @@ def get_voltx_real_number(target_range="22896"):
     }
     
     clean_rid = str(target_range).lower().replace("x", "").strip()
-    
-    # First, try calling liveaccess to find the correct active numeric ID if available
-    try:
-        live_res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=5)
-        if live_res.status_code == 200:
-            live_data = live_res.json()
-            # If the panel returns a list or dict of active ranges, we can match it
-            print(f"Live Access: {live_data}")
-    except Exception:
-        pass
-
-    # Request to getnum using the target rid
-    payload = {
-        "rid": clean_rid
-    }
+    payload = {"rid": clean_rid}
     
     try:
         res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=8)
-        print(f"GetNum URL: {BASE_API_URL}/getnum | Payload: {payload} | Status: {res.status_code} | Text: {res.text}")
         if res.status_code == 200:
             res_data = res.json()
             meta = res_data.get("meta", {})
@@ -83,6 +55,26 @@ def get_voltx_real_number(target_range="22896"):
         print(f"API Error: {e}")
 
     return None, None
+
+def fetch_live_traffic_from_panel():
+    """Fetches live access traffic ranges directly from Voltx panel API"""
+    headers = {
+        "mauthapi": VOLTX_API_KEY,
+        "Accept": "application/json"
+    }
+    try:
+        res = requests.get(f"{BASE_API_URL}/liveaccess", headers=headers, timeout=8)
+        if res.status_code == 200:
+            res_data = res.json()
+            meta = res_data.get("meta", {})
+            if meta.get("code") == 200:
+                # Returns list or dict of live ranges from panel
+                data = res_data.get("data")
+                return data
+    except Exception as e:
+        print(f"Live Traffic API Error: {e}")
+    
+    return None
 
 def check_voltx_otp(order_id):
     headers = {
@@ -164,7 +156,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.3)
 
         if not numbers:
-            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Try selecting a prefix from **🟢 Live Traffic**.", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Check **🟢 Live Traffic** for active ranges.", parse_mode="Markdown")
             return
 
         num_text = "\n".join([f"📱 `{p}`" for p in numbers])
@@ -182,12 +174,28 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔴 Please send your target number range (e.g. 22896 or 23762):")
 
     elif text == "🟢 Live Traffic":
-        traffic_lines = ["📊 **AVAILABLE RANGE TRAFFIC LIST**\n"]
-        for r_code, count in LIVE_RANGES:
-            country_display, _ = get_country_info(r_code)
-            traffic_lines.append(f"🌐 `{r_code}` - FB - **{count}** | {country_display}")
+        await update.message.reply_text("⏳ Fetching live traffic directly from Voltx panel...")
+        traffic_data = fetch_live_traffic_from_panel()
         
-        traffic_lines.append("\n⚡ Select a range and use **⚙️ Set Range** to target it!")
+        traffic_lines = ["📊 **PANEL LIVE TRAFFIC & RANGES**\n"]
+        
+        if traffic_data:
+            # If data is returned as list or dict from panel
+            if isinstance(traffic_data, list):
+                for item in traffic_data:
+                    r_code = str(item.get("rid") or item.get("range") or "N/A")
+                    country_display, _ = get_country_info(r_code)
+                    traffic_lines.append(f"🌐 `{r_code}` | {country_display}")
+            elif isinstance(traffic_data, dict):
+                for r_code, info in traffic_data.items():
+                    country_display, _ = get_country_info(str(r_code))
+                    traffic_lines.append(f"🌐 `{r_code}` | {country_display}")
+            else:
+                traffic_lines.append(f"`{traffic_data}`")
+        else:
+            traffic_lines.append("⚠️ Could not fetch live list automatically right now. You can use any valid active range ID.")
+        
+        traffic_lines.append("\n⚡ Copy a range and use **⚙️ Set Range** to target it!")
         await update.message.reply_text("\n".join(traffic_lines), parse_mode="Markdown")
 
     elif text == "💳 Balance":
