@@ -15,7 +15,7 @@ def create_number_markup(numbers):
     
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
     keyboard.append([InlineKeyboardButton("🌐 Change Country", callback_data="change_country")])
-    keyboard.append([InlineKeyboardButton("🔑 OTP Group ↗️", url="https://t.me/smmsaport")]) # আপনার গ্রুপের লিংক দিতে পারেন
+    keyboard.append([InlineKeyboardButton("🔑 OTP Group ↗️", url="https://t.me/smmsaport")])
     
     return InlineKeyboardMarkup(keyboard)
 
@@ -52,7 +52,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🎪 Leaderboard: No active rankings.")
 
     elif text == "🔓 Support":
-        await update.message.reply_text("🔒 Support: Contact Admin.")
+        await update.message.reply_text("🔓 Support: Contact Admin.")
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
