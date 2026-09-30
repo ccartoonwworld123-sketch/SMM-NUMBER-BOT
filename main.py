@@ -1,5 +1,4 @@
 import os
-import random
 import asyncio
 import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup
@@ -27,7 +26,7 @@ LIVE_RANGES = [
 ]
 
 def get_country_info(phone_number):
-    clean_num = phone_number.replace("+", "").strip()
+    clean_num = str(phone_number).replace("+", "").strip()
     
     if clean_num.startswith("237"):
         return "🇨🇲 CAMEROON (CM)", "cm"
@@ -44,23 +43,78 @@ def get_country_info(phone_number):
     else:
         return "🇨🇮 IVORY COAST (CI)", "ci"
 
-def generate_numbers_list(clean_prefix, count=3):
-    numbers = []
-    for _ in range(count):
-        random_suffix = "".join([str(random.randint(0, 9)) for _ in range(5)])
-        numbers.append(f"+{clean_prefix}{random_suffix}")
-    return numbers
+def get_voltx_number(service="fb", country="tg"):
+    headers = {
+        "Authorization": f"Bearer {VOLTX_API_KEY}",
+        "Accept": "application/json"
+    }
+    
+    urls = [
+        "https://voltxsms.com/api/v1/getNumber",
+        "https://voltxsms.com/api/getNumber",
+        "https://voltxsms.com/api/buy"
+    ]
+    
+    params = {"service": service, "country": country}
+    
+    for url in urls:
+        try:
+            res = requests.get(url, headers=headers, params=params, timeout=10)
+            if res.status_code == 200:
+                data = res.json()
+                phone = data.get("number") or data.get("phone")
+                order_id = data.get("id") or data.get("order_id")
+                if phone:
+                    return phone, order_id, "SUCCESS"
+        except Exception:
+            continue
 
-def create_multi_number_markup(numbers_list):
+    return None, None, "API_ERROR"
+
+def check_voltx_otp(order_id):
+    headers = {
+        "Authorization": f"Bearer {VOLTX_API_KEY}",
+        "Accept": "application/json"
+    }
+    try:
+        url = f"https://voltxsms.com/api/v1/getOtp?id={order_id}"
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            if data.get("sms") or data.get("code"):
+                return data.get("sms") or data.get("code")
+    except Exception as e:
+        print(f"OTP Check Error: {e}")
+    return None
+
+def create_multi_number_markup(orders_list):
     keyboard = []
-    for num in numbers_list:
-        keyboard.append([InlineKeyboardButton(f"👤 📋 {num}", callback_data=f"num_{num}")])
+    for phone, _ in orders_list:
+        keyboard.append([InlineKeyboardButton(f"👤 📋 {phone}", callback_data=f"num_{phone}")])
     
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
     keyboard.append([InlineKeyboardButton("🌐 Change Country", callback_data="change_country")])
     keyboard.append([InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")])
     
     return InlineKeyboardMarkup(keyboard)
+
+async def poll_for_otp(chat_id, order_id, phone, context):
+    for _ in range(24):
+        await asyncio.sleep(5)
+        status = check_voltx_otp(order_id)
+        if status and status != "WAITING":
+            otp_message = f"✅ **Facebook OTP Received!**\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
+            await context.bot.send_message(chat_id=chat_id, text=otp_message, parse_mode="Markdown")
+            return
+
+async def fetch_three_real_numbers(country_code):
+    orders = []
+    for _ in range(3):
+        phone, order_id, _ = get_voltx_number(service="fb", country=country_code)
+        if phone and order_id:
+            orders.append((phone, order_id))
+        await asyncio.sleep(0.5)
+    return orders
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
@@ -85,19 +139,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == "📞 Get API Number":
-        await update.message.reply_text("⏳ Requesting numbers...")
+        await update.message.reply_text("⏳ Requesting 3 real numbers from Voltx Panel...")
         
-        user_range = USER_RANGES.get(user_id, "23762")
+        user_range = USER_RANGES.get(user_id, "22897")
         clean_prefix = user_range.lower().replace("x", "")
+        country_display, country_code = get_country_info(clean_prefix)
         
-        country_display, _ = get_country_info(clean_prefix)
-        numbers = generate_numbers_list(clean_prefix, 3)
+        orders = await fetch_three_real_numbers(country_code)
         
-        num_text = "\n".join([f"📱 `{num}`" for num in numbers])
+        if not orders:
+            await update.message.reply_text(f"❌ No live numbers available currently in panel for range `{user_range}`.")
+            return
+
+        num_text = "\n".join([f"📱 `{phone}`" for phone, _ in orders])
+        country_display, _ = get_country_info(orders[0][0])
         
         header_text = f"❓ Service: 📘 Facebook\n{country_display}\n\n{num_text}\n\n⏳ Waiting for OTP..."
-        reply_markup = create_multi_number_markup(numbers)
+        reply_markup = create_multi_number_markup(orders)
         await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
+        
+        for phone, order_id in orders:
+            asyncio.create_task(poll_for_otp(update.effective_chat.id, order_id, phone, context))
 
     elif text == "⚙️ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
@@ -130,17 +192,25 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data == "change_number":
         user_id = query.from_user.id
         
-        user_range = USER_RANGES.get(user_id, "23762")
+        user_range = USER_RANGES.get(user_id, "22897")
         clean_prefix = user_range.lower().replace("x", "")
+        country_display, country_code = get_country_info(clean_prefix)
         
-        country_display, _ = get_country_info(clean_prefix)
-        numbers = generate_numbers_list(clean_prefix, 3)
+        orders = await fetch_three_real_numbers(country_code)
+        
+        if not orders:
+            await query.message.reply_text(f"❌ No live numbers available currently in panel for range `{user_range}`.")
+            return
 
-        num_text = "\n".join([f"📱 `{num}`" for num in numbers])
+        num_text = "\n".join([f"📱 `{phone}`" for phone, _ in orders])
+        country_display, _ = get_country_info(orders[0][0])
 
         header_text = f"❓ Service: 📘 Facebook\n{country_display}\n\n{num_text}\n\n⏳ Waiting for OTP..."
-        reply_markup = create_multi_number_markup(numbers)
+        reply_markup = create_multi_number_markup(orders)
         await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
+
+        for phone, order_id in orders:
+            asyncio.create_task(poll_for_otp(query.message.chat_id, order_id, phone, context))
 
     elif query.data == "change_country":
         await query.answer("Country list will be updated soon!", show_alert=True)
