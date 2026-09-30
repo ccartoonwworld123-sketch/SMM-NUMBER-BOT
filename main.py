@@ -149,8 +149,9 @@ def create_number_markup(numbers_list):
     keyboard = []
     for num in numbers_list:
         _, _, flag = get_country_info(num)
-        # ইউআরএল বাদ দিয়ে callback_data ব্যবহার করা হলো যাতে কোনো অতিরিক্ত আইকন বা ফরোয়ার্ড অপশন না আসে
-        keyboard.append([InlineKeyboardButton(f"📋 {flag} {num}", callback_data=f"copy_{num}")])
+        # আপনার স্ক্রিনশটের কাঙ্ক্ষিত URL স্কিম ফরম্যাট
+        copy_url = f"https://t.me/share/url?url={num}"
+        keyboard.append([InlineKeyboardButton(f"📋 {flag} {num}", url=copy_url)])
     
     keyboard.append([
         InlineKeyboardButton("🔔 OTP GROUP", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}"),
@@ -263,13 +264,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data.startswith("copy_"):
-        num_to_copy = query.data.replace("copy_", "")
-        await query.answer(f"Number: {num_to_campy if 'num_to_campy' in locals() else num_to_copy}\nClick to copy or use text below.", show_alert=True)
-        # ইউজার যেন সহজেই মেসেজ থেকে কপি করতে পারে, তাই চ্যাটে সরাসরি নাম্বারটি টেক্সট আকারেও পাঠিয়ে দেওয়া হলো
-        await context.bot.send_message(chat_id=query.message.chat_id, text=f"`{num_to_copy}`", parse_mode="Markdown")
-
-    elif query.data == "change_number":
+    if query.data == "change_number":
         user_id = query.from_user.id
         user_range = USER_RANGES.get(user_id, "22896")
         
