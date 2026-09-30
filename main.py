@@ -33,6 +33,8 @@ def get_country_info(phone_number):
         return "Guinea", "GN", "🇬🇳"
     elif clean_num.startswith("996"):
         return "Kyrgyzstan", "KG", "🇰🇬"
+    elif clean_num.startswith("43"):
+        return "Austria", "AT", "🇦🇹"
     else:
         return "Togo", "TG", "🇹🇬"
 
@@ -146,9 +148,16 @@ def check_voltx_otp(order_id):
 def create_number_markup(numbers_list):
     keyboard = []
     for num in numbers_list:
-        keyboard.append([InlineKeyboardButton(f"📋 {num}", callback_data=f"copy_{num}")])
+        _, _, flag = get_country_info(num)
+        # স্ক্রিনশটের মতো পতাকা ও কপি আইকন সহ বাটন
+        keyboard.append([InlineKeyboardButton(f"📋 {flag} {num}", callback_data=f"copy_{num}")])
     
-    keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
+    # স্ক্রিনশটের লেআউটের সাথে মিল রেখে নিচের বাটনগুলো সাজানো হলো
+    keyboard.append([
+        InlineKeyboardButton("🔔 OTP GROUP", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}"),
+        InlineKeyboardButton("🔄 Change", callback_data="change_number")
+    ])
+    keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="back_home")])
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
@@ -173,7 +182,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
+    if text in ["📞 Get API Number", "⚙️️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
         USER_STATES[user_id] = None
 
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
@@ -203,8 +212,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Check **🟢 Live Traffic**.", parse_mode="Markdown")
             return
 
-        country_name, _, _ = get_country_info(numbers[0])
-        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}"
+        country_name, _, flag = get_country_info(numbers[0])
+        header_text = f"✅ **Number:** {flag} {country_name}"
         
         reply_markup = create_number_markup(numbers)
         await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
@@ -220,7 +229,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sorted_ranges, total_hits = fetch_live_traffic_from_panel()
         
         traffic_lines = [
-            "📊 **Live Trafic**\n",
+            "📊 **Live Traffic**\n",
             f"📋 **Total OTP:** {total_hits}",
             f"⏱ **Record:** Last 15 Minutes"
         ]
@@ -237,7 +246,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             traffic_lines.append("⚠️ No active ranges found right now.")
         
-        traffic_lines.append("\n⚡ Copy a range and use **⚙️ Set Range** to target it!")
+        traffic_lines.append("\n⚡ Copy a range and use **⚙️️ Set Range** to target it!")
         await update.message.reply_text("\n".join(traffic_lines), parse_mode="Markdown")
 
     elif text == "💳 Balance":
@@ -257,6 +266,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query.data.startswith("copy_"):
         phone_num = query.data.replace("copy_", "")
         await query.answer()
+        # নাম্বারে ক্লিক করার সাথে সাথে চ্যাটে নাম্বারটি টেক্সট আকারে পাঠিয়ে দিবে, যা সহজেই কপি করা যাবে
         await context.bot.send_message(
             chat_id=query.message.chat_id, 
             text=f"`{phone_num}`", 
@@ -283,14 +293,18 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not numbers:
             return
 
-        country_name, _, _ = get_country_info(numbers[0])
-        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}"
+        country_name, _, flag = get_country_info(numbers[0])
+        header_text = f"✅ **Number:** {flag} {country_name}"
         
         reply_markup = create_number_markup(numbers)
         await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
 
         for p, oid in orders:
             asyncio.create_task(poll_for_otp(query.message.chat_id, oid, p, context))
+
+    elif query.data == "back_home":
+        await query.message.delete()
+        await start(update, context)
 
     elif query.data == "withdraw_binance":
         pass
