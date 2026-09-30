@@ -126,7 +126,8 @@ def check_voltx_otp(order_id):
     endpoints = [
         f"{BASE_API_URL}/getotp?id={order_id}",
         f"{BASE_API_URL}/status?id={order_id}",
-        f"{BASE_API_URL}/getnum?id={order_id}"
+        f"{BASE_API_URL}/getnum?id={order_id}",
+        f"{BASE_API_URL}/console"
     ]
     
     for url in endpoints:
@@ -134,9 +135,17 @@ def check_voltx_otp(order_id):
             res = requests.get(url, headers=headers, timeout=2)
             if res.status_code == 200:
                 data = res.json()
+                
+                if "console" in url and "hits" in data.get("data", {}):
+                    for hit in data["data"]["hits"]:
+                        if str(hit.get("id")) == str(order_id) or str(hit.get("rid")) in str(order_id):
+                            sms_code = hit.get("sms") or hit.get("code") or hit.get("otp")
+                            if sms_code and str(sms_code).upper() != "WAITING":
+                                return str(sms_code)
+                
                 sms_code = data.get("sms") or data.get("code") or data.get("otp") or data.get("text")
                 if not sms_code and isinstance(data.get("data"), dict):
-                    sms_code = data["data"].get("sms") or data["data"].get("code") or data["data"].get("otp")
+                    sms_code = data["data"].get("sms") or data["data"].get("code") or data["data"].get("otp") or data["data"].get("text")
                 
                 if sms_code and str(sms_code).upper() != "WAITING":
                     return str(sms_code)
@@ -149,7 +158,6 @@ def create_number_markup(numbers_list):
     keyboard = []
     for num in numbers_list:
         _, _, flag = get_country_info(num)
-        # অতিরিক্ত ইমোজি সরিয়ে শুধু ফ্লাগ এবং নাম্বার রাখা হলো, টেলিগ্রাম নিজে থেকেই কপি বাটন আইকন যুক্ত করবে
         button_text = f"{flag} {num}"
         keyboard.append([
             InlineKeyboardButton(
@@ -176,7 +184,7 @@ async def poll_for_otp(chat_id, order_id, phone, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️ Set Range"],
+        ["📞 Get API Number", "⚙️️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
@@ -249,7 +257,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 _, _, flag = get_country_info(r)
                 traffic_lines.append(f"• {flag} `{r}` - {info['sid']} - {info['count']}")
         else:
-            traffic_lines.append("⚠️ No active ranges found right now.")
+            traffic_lines.append("⚠️️ No active ranges found right now.")
         
         traffic_lines.append("\n⚡ Copy a range and use **⚙️ Set Range** to target it!")
         await update.message.reply_text("\n".join(traffic_lines), parse_mode="Markdown")
