@@ -16,19 +16,19 @@ USER_RANGES = {}
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
     if clean_num.startswith("237"):
-        return "🇨🇲 CAMEROON (CM)", "cm"
+        return "Cameroon", "cm"
     elif clean_num.startswith("225"):
-        return "🇨🇮 IVORY COAST (CI)", "ci"
+        return "Ivory Coast", "ci"
     elif clean_num.startswith("228"):
-        return "🇹🇬 TOGO (TG)", "tg"
+        return "Togo", "tg"
     elif clean_num.startswith("229"):
-        return "🇧🇯 BENIN (BJ)", "bj"
+        return "Benin", "bj"
     elif clean_num.startswith("255"):
-        return "🇹🇿 TANZANIA (TZ)", "tz"
+        return "Tanzania", "tz"
     elif clean_num.startswith("266"):
-        return "🇱🇸 LESOTHO (LS)", "ls"
+        return "Lesotho", "ls"
     else:
-        return "🇨🇮 IVORY COAST (CI)", "ci"
+        return "Togo", "tg"
 
 def get_voltx_real_number(target_range="22896"):
     headers = {
@@ -42,14 +42,12 @@ def get_voltx_real_number(target_range="22896"):
     
     try:
         res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=8)
-        print(f"GetNum Response: {res.status_code} | Text: {res.text}")
         if res.status_code == 200:
             res_data = res.json()
             meta = res_data.get("meta", {})
             if meta.get("code") == 200:
                 data = res_data.get("data", {})
                 phone = data.get("full_number") or data.get("national_number")
-                # Extracting the correct unique transaction/order ID from response
                 order_id = res_data.get("id") or data.get("id") or res_data.get("rid") or clean_rid
                 if phone:
                     return str(phone), str(order_id)
@@ -91,7 +89,6 @@ def check_voltx_otp(order_id):
             res = requests.get(url, headers=headers, timeout=8)
             if res.status_code == 200:
                 data = res.json()
-                # Checking various possible keys for OTP/SMS in panel response
                 sms_code = data.get("sms") or data.get("code") or data.get("otp") or data.get("text")
                 if not sms_code and isinstance(data.get("data"), dict):
                     sms_code = data["data"].get("sms") or data["data"].get("code") or data["data"].get("otp")
@@ -103,11 +100,11 @@ def check_voltx_otp(order_id):
             
     return None
 
-def create_multi_number_markup(numbers_list):
+def create_number_markup(numbers_list, user_range):
     keyboard = []
     for num in numbers_list:
-        # Clicking this button will show a popup alert with the number for easy copying
-        keyboard.append([InlineKeyboardButton(f"👤 📋 {num}", callback_data=f"copy_{num}")])
+        # স্ক্রিনশটের মতো কপি বাটন ডিজাইন
+        keyboard.append([InlineKeyboardButton(f"📋  {num}", callback_data=f"copy_{num}")])
     
     keyboard.append([InlineKeyboardButton("🔄 Change Number", callback_data="change_number")])
     keyboard.append([InlineKeyboardButton("🌐 Change Country", callback_data="change_country")])
@@ -116,12 +113,11 @@ def create_multi_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
-    print(f"Started polling for OTP | Order ID: {order_id} | Phone: {phone}")
-    for _ in range(60): # Polling for 5 minutes (60 * 5s)
+    for _ in range(60): 
         await asyncio.sleep(5)
         status = check_voltx_otp(order_id)
         if status:
-            otp_message = f"✅ **Facebook OTP Received!**\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
+            otp_message = f"✅ **OTP Received!**\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
             await context.bot.send_message(chat_id=chat_id, text=otp_message, parse_mode="Markdown")
             return
 
@@ -148,7 +144,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             USER_RANGES[user_id] = clean_text
             await update.message.reply_text(f"🔴 Target range updated to: `{clean_text}`", parse_mode="Markdown")
         else:
-            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896 or 23762).")
+            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
         return
 
     if text == "📞 Get API Number":
@@ -168,14 +164,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await asyncio.sleep(0.3)
 
         if not numbers:
-            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Check **🟢 Live Traffic** for active ranges.", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ **No Real Number Available!**\n\nPanel has no stock for range `{user_range}`. Check **🟢 Live Traffic**.", parse_mode="Markdown")
             return
 
-        num_text = "\n".join([f"📱 `{p}`" for p in numbers])
-        country_display, _ = get_country_info(numbers[0])
+        country_name, _ = get_country_info(numbers[0])
+        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}\n\n⏳ Waiting for OTP..."
         
-        header_text = f"❓ Service: 📘 Facebook\n{country_display}\n\n{num_text}\n\n⏳ Waiting for OTP..."
-        reply_markup = create_multi_number_markup(numbers)
+        reply_markup = create_number_markup(numbers, user_range)
         await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
         
         for p, oid in orders:
@@ -183,7 +178,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "⚙️ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
-        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896 or 23762):")
+        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
 
     elif text == "🟢 Live Traffic":
         await update.message.reply_text("⏳ Fetching live traffic directly from Voltx panel...")
@@ -195,16 +190,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if isinstance(traffic_data, list):
                 for item in traffic_data:
                     r_code = str(item.get("rid") or item.get("range") or "N/A")
-                    country_display, _ = get_country_info(r_code)
-                    traffic_lines.append(f"🌐 `{r_code}` | {country_display}")
+                    c_name, _ = get_country_info(r_code)
+                    traffic_lines.append(f"🌐 `{r_code}` | {c_name}")
             elif isinstance(traffic_data, dict):
                 for r_code, info in traffic_data.items():
-                    country_display, _ = get_country_info(str(r_code))
-                    traffic_lines.append(f"🌐 `{r_code}` | {country_display}")
+                    c_name, _ = get_country_info(str(r_code))
+                    traffic_lines.append(f"🌐 `{r_code}` | {c_name}")
             else:
                 traffic_lines.append(f"`{traffic_data}`")
         else:
-            traffic_lines.append("⚠️ Could not fetch live list automatically right now. You can use any valid active range ID.")
+            traffic_lines.append("⚠️ Could not fetch live list automatically right now.")
         
         traffic_lines.append("\n⚡ Copy a range and use **⚙️ Set Range** to target it!")
         await update.message.reply_text("\n".join(traffic_lines), parse_mode="Markdown")
@@ -213,7 +208,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         balance_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw_binance")],
             [InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
-            [InlineKeyboardButton("📣 OTP Group ↗️️", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
+            [InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
         ])
         await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
 
@@ -223,7 +218,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     
-    # Handle direct copy button click
     if query.data.startswith("copy_"):
         copied_num = query.data.replace("copy_", "")
         await query.answer(f"✅ Number Copied: {copied_num}", show_alert=True)
@@ -250,11 +244,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.message.reply_text(f"❌ No real numbers available in panel for range `{user_range}` right now.")
             return
 
-        num_text = "\n".join([f"📱 `{p}`" for p in numbers])
-        country_display, _ = get_country_info(numbers[0])
-
-        header_text = f"❓ Service: 📘 Facebook\n{country_display}\n\n{num_text}\n\n⏳ Waiting for OTP..."
-        reply_markup = create_multi_number_markup(numbers)
+        country_name, _ = get_country_info(numbers[0])
+        header_text = f"🌐 Country : {country_name}\n⚙️ Range : {user_range}\n\n⏳ Waiting for OTP..."
+        
+        reply_markup = create_number_markup(numbers, user_range)
         await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="Markdown")
 
         for p, oid in orders:
