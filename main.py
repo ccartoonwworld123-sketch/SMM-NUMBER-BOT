@@ -123,28 +123,49 @@ def check_voltx_otp(target_phone, order_id):
         "Accept": "application/json"
     }
     
+    clean_target = str(target_phone).replace("+", "").strip()
+    
+    # ১. প্রথমে রিয়েল-টাইম কনসোল (`/console`) থেকে চেক করবে যাতে ইনস্ট্যান্ট পাওয়া যায়
     try:
-        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=3)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
             res_data = res.json()
             if res_data.get("meta", {}).get("code") == 200:
-                otps = res_data.get("data", {}).get("otps", [])
-                clean_target = str(target_phone).replace("+", "").strip()
-                
-                for item in otps:
-                    num = str(item.get("number", "")).replace("+", "").strip()
-                    oid = str(item.get("otp_id", ""))
-                    msg = str(item.get("message", ""))
-                    
-                    if clean_target in num or (order_id and order_id in oid):
+                hits = res_data.get("data", {}).get("hits", [])
+                for hit in hits:
+                    num = str(hit.get("number", "")).replace("+", "").strip()
+                    msg = str(hit.get("message", ""))
+                    if clean_target in num or clean_target in msg:
                         import re
                         match = re.search(r'\b\d{4,6}\b', msg)
                         if match:
                             return match.group(0)
                         elif msg:
                             return msg
-    except Exception as e:
-        print(f"Success OTP API Error: {e}")
+    except Exception:
+        pass
+
+    # ২. এরপর সাকসেস ওটিপি (`/success-otp`) থেকে চেক করবে
+    try:
+        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
+        if res.status_code == 200:
+            res_data = res.json()
+            if res_data.get("meta", {}).get("code") == 200:
+                otps = res_data.get("data", {}).get("otps", [])
+                for item in otps:
+                    num = str(item.get("number", "")).replace("+", "").strip()
+                    oid = str(item.get("otp_id", ""))
+                    msg = str(item.get("message", ""))
+                    
+                    if clean_target in num or (order_id and order_id in oid) or clean_target in msg:
+                        import re
+                        match = re.search(r'\b\d{4,6}\b', msg)
+                        if match:
+                            return match.group(0)
+                        elif msg:
+                            return msg
+    except Exception:
+        pass
             
     return None
 
@@ -168,8 +189,9 @@ def create_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
-    for _ in range(60): 
-        await asyncio.sleep(4)
+    # ইন্টারভাল কমিয়ে ২ সেকেন্ড করা হয়েছে যাতে খুব দ্রুত ক্যাচ করতে পারে
+    for _ in range(90): 
+        await asyncio.sleep(2)
         status = check_voltx_otp(phone, order_id)
         if status:
             otp_message = f"🚨 **NEW OTP RECEIVED!** 🚨\n\n📱 **Number:** `{phone}`\n🔑 **OTP Code:** `{status}`"
@@ -186,7 +208,7 @@ async def poll_for_otp(chat_id, order_id, phone, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️️ Set Range"],
+        ["📞 Get API Number", "⚙️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
