@@ -239,14 +239,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 range_counts = {}
                 for h in hits:
-                    num = str(h.get("number", "") or h.get("phone", "") or h.get("full_number", ""))
+                    num = str(h.get("number", "") or h.get("phone", "") or h.get("full_number", "") or h.get("national_number", "") or h.get("receiver", "") or h.get("mobile", ""))
                     clean_num = ''.join(filter(str.isdigit, num))
-                    if len(clean_num) >= 5:
-                        r_prefix = clean_num[:5] + "XXX"
-                    else:
-                        r_prefix = "UNKNOWN"
                     
-                    service = str(h.get("app", "") or h.get("service", "FACEBOOK")).upper()
+                    r_prefix = str(h.get("range", "") or h.get("rid", "") or h.get("prefix", "")).upper().strip()
+                    
+                    if not r_prefix or r_prefix == "NONE":
+                        if len(clean_num) >= 7:
+                            r_prefix = clean_num[:7] + "XXX"
+                        elif len(clean_num) >= 5:
+                            r_prefix = clean_num[:5] + "XXX"
+                        else:
+                            r_prefix = clean_num + "XXX" if clean_num else "2010XXX"
+                    
+                    service = str(h.get("app", "") or h.get("service", "") or h.get("name", "FACEBOOK")).upper()
+                    if not service or service == "NONE": service = "FACEBOOK"
+                    
                     key = (r_prefix, service)
                     range_counts[key] = range_counts.get(key, 0) + 1
 
@@ -262,7 +270,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 await update.message.reply_text(live_text, parse_mode="HTML")
             else:
-                await update.message.reply_text("⚠️️ Failed to fetch live traffic from panel.")
+                await update.message.reply_text("⚠️ Failed to fetch live traffic from panel.")
         except Exception as e:
             await update.message.reply_text(f"⚠️ Error fetching live traffic: {e}")
 
