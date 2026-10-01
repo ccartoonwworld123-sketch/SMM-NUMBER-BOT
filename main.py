@@ -10,10 +10,12 @@ BOT_TOKEN = "8752686767:AAGiwPVrhS2ghoEgCdmook8cJxLRuPo_UA0"
 VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 
-# Voltx API Base Path
+# Voltx API Base Path & Correct Headers
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
 HEADERS = {
-    "mauthapi": VOLTX_API_KEY
+    "Authorization": f"Bearer {VOLTX_API_KEY}",
+    "mauthapi": VOLTX_API_KEY,
+    "Content-Type": "application/json"
 }
 
 # Initialize Telegram Bot & Flask App
@@ -56,7 +58,6 @@ def format_otp_message(otp_item):
     operator = otp_item.get("operator", "MOBILE")
     country = otp_item.get("country", "")
 
-    # Panel er layout er moto kore sajano holo
     formatted_msg = (
         f"🔹 **{service}**  `{number}`\n"
         f"💬 {message_text}\n"
@@ -117,7 +118,6 @@ def background_relay_worker():
                 latest = otps[0]
                 otp_id = latest.get("otp_id") or latest.get("time") or latest.get("number")
                 
-                # Jodi notun otp ase tahole group-e pathabe
                 if otp_id != last_seen_otp_id:
                     last_seen_otp_id = otp_id
                     formatted_msg = format_otp_message(latest)
@@ -125,7 +125,7 @@ def background_relay_worker():
         except Exception as e:
             print(f"Background worker error: {e}")
         
-        time.sleep(5) # protich 5 second por por check korbe
+        time.sleep(5)
 
 # --- Main Execution ---
 if __name__ == "__main__":
