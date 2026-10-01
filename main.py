@@ -1,12 +1,13 @@
-import time
+import os
+from threading import Thread
 import requests
 import telebot
 from telebot import types
 from flask import Flask
-from threading import Thread
-import os
 
-# --- Configuration & Credentials ---
+# =========================
+# CONFIG & CREDENTIALS
+# =========================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAEKH4RRI6jWzinLnpDEdah-OtWhG4h-Bb0")
 VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
@@ -20,9 +21,20 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-# Initialize Telegram Bot & Flask App
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 app = Flask(__name__)
+
+# Demo user data storage
+users = {}
+
+def get_user(user_id):
+    if user_id not in users:
+        users[user_id] = {
+            "balance": 0.091,
+            "binance_id": "Not Set",
+            "range": "22896"
+        }
+    return users[user_id]
 
 def fetch_recent_otps():
     url = f"{BASE_API_URL}/success-otp"
@@ -42,88 +54,293 @@ def fetch_recent_otps():
 def home():
     return "Bot is running live!"
 
-# --- Keyboards ---
-def main_menu_keyboard():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+
+# =========================
+# MAIN MENU
+# =========================
+def main_menu():
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        row_width=2
+    )
     markup.add(
-        types.KeyboardButton("Get API Number"),
-        types.KeyboardButton("Set Range"),
-        types.KeyboardButton("Live Traffic"),
-        types.KeyboardButton("Balance"),
-        types.KeyboardButton("OTP Group")
+        types.KeyboardButton("📞 Get API Number"),
+        types.KeyboardButton("⚙️ Set Range")
+    )
+    markup.add(
+        types.KeyboardButton("🟢 Live Traffic"),
+        types.KeyboardButton("💳 Balance")
+    )
+    markup.add(
+        types.KeyboardButton("📣 OTP Group")
     )
     return markup
 
-@bot.message_handler(commands=['start', 'help'])
-def send_welcome(message):
-    welcome_text = (
-        "💻 Programming & Development\n"
-        "Tools • Resources • Services\n"
-        "Everything you need in one place. ⚡\n\n"
-        "Use the buttons below to control your panel:"
+
+# =========================
+# /START
+# =========================
+@bot.message_handler(commands=["start"])
+def start(message):
+    user = get_user(message.from_user.id)
+
+    text = (
+        "👋 <b>Welcome to FB MASTER NUMBER</b>\n\n"
+        f"💰 <b>Current Balance:</b> ${user['balance']:.3f}\n"
+        f"🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\n"
+        "<i>Minimum withdraw is $0.2</i>"
     )
-    bot.send_message(message.chat.id, welcome_text, reply_markup=main_menu_keyboard())
 
-@bot.message_handler(func=lambda message: True)
-def handle_menu_clicks(message):
-    text = message.text
-    chat_id = message.chat.id
-
-    if text == "Get API Number":
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("+22896234416", callback_data="copy_num"))
-        markup.add(types.InlineKeyboardButton("+22896161787", callback_data="copy_num"))
-        markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_num"))
-        
-        number_info = "🌐 Country : Togo\n⚙️ Range : 22896"
-        bot.send_message(chat_id, number_info, reply_markup=markup)
-
-    elif text == "Set Range":
-        bot.send_message(chat_id, "🔴 Please send your target number range (e.g. 5198xxxxxx or 1234xxxx):")
-
-    elif text == "Live Traffic":
-        traffic_text = (
-            "📊 **Live Trafic**\n\n"
-            "🔥 **Total OTP:** 121\n"
-            "⏱️️ **Record:** Last 5 Minit\n"
-            "👑 **Top Range:** 🌐 23762XXX FB\n\n"
-            "🌐 **Range List**\n"
-            "• 23762XXX - FB - 46\n"
-            "• 237622XXX - FB - 27\n"
-            "• 2246560XXX - FB - 8"
+    inline = types.InlineKeyboardMarkup(row_width=1)
+    inline.add(
+        types.InlineKeyboardButton(
+            "💳 Withdraw via Binance",
+            callback_data="withdraw"
         )
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("🔄 Refresh", callback_data="refresh_traffic"))
-        bot.send_message(chat_id, traffic_text, reply_markup=markup)
-
-    elif text == "Balance":
-        balance_text = (
-            "💳 **Your Balance Account**\n\n"
-            "Current Balance: `$0.091`\n"
-            "Binance Pay ID: Not Set\n\n"
-            "_Minimum withdraw is $0.2_"
+    )
+    inline.add(
+        types.InlineKeyboardButton(
+            "🔴 Set Binance ID",
+            callback_data="set_binance"
         )
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw"))
-        markup.add(types.InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance"))
-        markup.add(types.InlineKeyboardButton("📢 OTP Group", url=OTP_GROUP_LINK))
-        bot.send_message(chat_id, balance_text, reply_markup=markup)
-
-    elif text == "OTP Group":
-        group_text = (
-            "📢 **Join our official OTP Group for live updates:**\n\n"
-            f"Link: {OTP_GROUP_LINK}"
+    )
+    inline.add(
+        types.InlineKeyboardButton(
+            "📣 OTP Group ↗",
+            callback_data="otp_group"
         )
-        markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📢 Join OTP Group", url=OTP_GROUP_LINK))
-        bot.send_message(chat_id, group_text, reply_markup=markup)
+    )
 
-    else:
-        bot.send_message(chat_id, "Please use the menu buttons below.", reply_markup=main_menu_keyboard())
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=inline
+    )
 
-# --- Safe Background Worker ---
+    bot.send_message(
+        message.chat.id,
+        "👇 <b>Main Menu</b>",
+        reply_markup=main_menu()
+    )
+
+
+# =========================
+# OTP GROUP
+# =========================
+@bot.callback_query_handler(func=lambda call: call.data == "otp_group")
+def otp_group_callback(call):
+    text = (
+        "📣 <b>Join our official OTP Group for live updates:</b>\n\n"
+        f"🔗 Link: {OTP_GROUP_LINK}"
+    )
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton(
+            "📣 Join OTP Group ↗",
+            url=OTP_GROUP_LINK
+        )
+    )
+    bot.answer_callback_query(call.id)
+    bot.send_message(
+        call.message.chat.id,
+        text,
+        reply_markup=markup
+    )
+
+
+@bot.message_handler(func=lambda m: m.text == "📣 OTP Group")
+def otp_group_button(message):
+    text = (
+        "📣 <b>Join our official OTP Group for live updates:</b>\n\n"
+        f"🔗 Link: {OTP_GROUP_LINK}"
+    )
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton(
+            "📣 Join OTP Group ↗",
+            url=OTP_GROUP_LINK
+        )
+    )
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=markup
+    )
+
+
+# =========================
+# BALANCE
+# =========================
+@bot.message_handler(func=lambda m: m.text == "💳 Balance")
+def balance(message):
+    user = get_user(message.from_user.id)
+
+    text = (
+        f"💰 <b>Current Balance:</b> ${user['balance']:.3f}\n"
+        f"🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\n"
+        "Minimum withdraw is <b>$0.2</b>"
+    )
+
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton(
+            "💳 Withdraw via Binance",
+            callback_data="withdraw"
+        )
+    )
+    markup.add(
+        types.InlineKeyboardButton(
+            "🔴 Set Binance ID",
+            callback_data="set_binance"
+        )
+    )
+
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=markup
+    )
+
+
+# =========================
+# SET BINANCE ID
+# =========================
+@bot.callback_query_handler(func=lambda call: call.data == "set_binance")
+def set_binance(call):
+    bot.answer_callback_query(call.id)
+    msg = bot.send_message(
+        call.message.chat.id,
+        "🆔 <b>Send your Binance Pay ID:</b>"
+    )
+    bot.register_next_step_handler(msg, save_binance_id)
+
+def save_binance_id(message):
+    user = get_user(message.from_user.id)
+    user["binance_id"] = message.text.strip()
+    bot.send_message(
+        message.chat.id,
+        "✅ <b>Binance Pay ID saved successfully.</b>",
+        reply_markup=main_menu()
+    )
+
+
+# =========================
+# WITHDRAW
+# =========================
+@bot.callback_query_handler(func=lambda call: call.data == "withdraw")
+def withdraw(call):
+    user = get_user(call.from_user.id)
+
+    if user["balance"] < 0.2:
+        bot.answer_callback_query(
+            call.id,
+            "❌ Minimum withdraw is $0.2",
+            show_alert=True
+        )
+        return
+
+    if user["binance_id"] == "Not Set":
+        bot.answer_callback_query(
+            call.id,
+            "❌ Please set Binance Pay ID first.",
+            show_alert=True
+        )
+        return
+
+    bot.answer_callback_query(
+        call.id,
+        "Withdrawal request received.",
+        show_alert=True
+    )
+
+
+# =========================
+# SET RANGE
+# =========================
+@bot.message_handler(func=lambda m: m.text == "⚙️ Set Range")
+def set_range(message):
+    msg = bot.send_message(
+        message.chat.id,
+        "⚙️ <b>Send your range:</b>\n\n"
+        "Example:\n"
+        "<code>22896</code>"
+    )
+    bot.register_next_step_handler(msg, save_range)
+
+def save_range(message):
+    user = get_user(message.from_user.id)
+    user["range"] = message.text.strip()
+    bot.send_message(
+        message.chat.id,
+        f"✅ Range set to: <code>{user['range']}</code>",
+        reply_markup=main_menu()
+    )
+
+
+# =========================
+# GET API NUMBER (Requested Buttons Added)
+# =========================
+@bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
+def get_api_number(message):
+    user = get_user(message.from_user.id)
+
+    text = (
+        "🌐 <b>Country:</b> Togo 🇹🇬\n"
+        f"⚙️ <b>Range:</b> {user['range']}"
+    )
+
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("+22896234416", callback_data="copy_num"))
+    markup.add(types.InlineKeyboardButton("+22896161787", callback_data="copy_num"))
+    markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_number"))
+
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=markup
+    )
+
+
+# =========================
+# CHANGE NUMBER
+# =========================
+@bot.callback_query_handler(func=lambda call: call.data == "change_number")
+def change_number(call):
+    bot.answer_callback_query(
+        call.id,
+        "Number changed.",
+        show_alert=False
+    )
+    bot.send_message(
+        call.message.chat.id,
+        "📱 <b>New numbers fetched successfully.</b>"
+    )
+
+
+# =========================
+# LIVE TRAFFIC
+# =========================
+@bot.message_handler(func=lambda m: m.text == "🟢 Live Traffic")
+def live_traffic(message):
+    text = (
+        "🟢 <b>Live Traffic</b>\n\n"
+        "📊 Active: 1\n"
+        "📞 Requests: 121\n"
+        "✅ Successful: 105\n"
+        "❌ Failed: 16"
+    )
+    bot.send_message(
+        message.chat.id,
+        text
+    )
+
+
+# =========================
+# BACKGROUND RELAY WORKER
+# =========================
 def background_relay_worker():
     sent_ids = set()
+    import time
     time.sleep(10)
     while True:
         try:
@@ -131,50 +348,41 @@ def background_relay_worker():
             if otps and isinstance(otps, list):
                 for otp in reversed(otps[:10]):
                     otp_id = otp.get("otp_id") or otp.get("time") or otp.get("number") or str(otp)
-                    
                     if otp_id not in sent_ids:
                         sent_ids.add(otp_id)
                         if len(sent_ids) > 100:
                             sent_ids.pop()
                             
-                        service = otp.get("service", otp.get("sid", "FB"))
+                        service = otp.get("source", otp.get("service", "FB"))
                         message_text = otp.get("message", "Facebook: Your code is 240022")
-                        country = otp.get("country", "CM")
-                        range_val = otp.get("range", "23762XXX")
-                        lang = otp.get("language", "English")
-
-                        formatted_msg = (
-                            f"🟢 **OTP**                 `Admin`\n"
-                            f"👤 **{service} OTP RECEIVE**\n"
-                            f"━━━━━━━━━━━━━━━━━━━\n"
-                            f"🇨🇲 **Country** : {country}\n"
-                            f"🎯 **Range**   : {range_val}\n"
-                            f"🗣️ **Language** : {lang}\n"
-                            f"━━━━━━━━━━━━━━━━━━━\n"
-                            f"✉ **Message** :\n"
-                            f"{message_text}"
-                        )
+                        country = otp.get("country", "Togo")
+                        range_val = otp.get("range", "22896")
                         
+                        formatted_msg = (
+                            f"🟢 <b>OTP RECEIVED</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"🌐 <b>Country</b> : {country}\n"
+                            f"🎯 <b>Range</b>   : {range_val}\n"
+                            f"✉ <b>Message</b> :\n{message_text}"
+                        )
                         markup = types.InlineKeyboardMarkup()
                         markup.add(types.InlineKeyboardButton("NUMBER BOT", url=f"https://t.me/{bot.get_me().username}"))
-                        
                         bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, reply_markup=markup)
         except Exception as e:
             print(f"Worker Error: {e}")
-        
         time.sleep(5)
 
+
+# =========================
+# RUN BOT & FLASK SERVER
+# =========================
 if __name__ == "__main__":
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
     
     Thread(target=background_relay_worker, daemon=True).start()
-    
-    print("Clearing webhooks and starting bot polling securely...")
-    try:
-        bot.remove_webhook()
-    except Exception as e:
-        print(f"Webhook error: {e}")
-        
+
+    print("🤖 Bot and Web Server are running live...")
+    bot.remove_webhook()
     bot.infinity_polling(skip_pending=True, interval=1, timeout=20)
