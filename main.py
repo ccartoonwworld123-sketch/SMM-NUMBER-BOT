@@ -6,7 +6,7 @@ from telebot import types
 from flask import Flask
 from collections import Counter
 
-BOT_TOKEN = "8752686767:AAEc3baCymIbw2RE3jSaM1S6jIc5goE3Cg0"
+BOT_TOKEN = "8752686767:AAGbez-t_ZhrsEbp79Wd1oYM4avQ9j1dP8Q"
 VOLTX_API_KEY = "M50JCU9H8WW"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
@@ -38,7 +38,6 @@ def fetch_panel_number(range_val):
         response = requests.post(url, headers=HEADERS, json={"rid": range_val}, timeout=10)
         if response.status_code == 200:
             res_data = response.json()
-            # প্যানেলের রিয়েল রেসপন্স স্ট্রাকচার হ্যান্ডেল করার জন্য
             if res_data.get("meta", {}).get("code") == 200 or res_data.get("status") == 200 or "data" in res_data:
                 data = res_data.get("data", {})
                 if isinstance(data, list) and len(data) > 0:
@@ -156,7 +155,6 @@ def send_api_numbers(chat_id, user_id, edit_message=None):
     numbers = []
     country = "Togo"
     
-    # প্যানেল থেকে রিয়েল নাম্বার তোলার চেষ্টা
     for _ in range(2):
         num, c = fetch_panel_number(range_val)
         if num and num not in numbers:
@@ -168,7 +166,7 @@ def send_api_numbers(chat_id, user_id, edit_message=None):
     
     if numbers:
         for num in numbers:
-            markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num) if hasattr(types, 'CopyTextButton') else None))
+            markup.add(types.InlineKeyboardButton(num, callback_data="dummy"))
     else:
         text += "\n\n⚠️ <i>No active numbers found from panel right now. Please try again or change range.</i>"
 
