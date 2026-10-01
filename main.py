@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 import telebot
 from flask import Flask
@@ -7,9 +8,9 @@ from threading import Thread
 # --- Configuration & Credentials ---
 BOT_TOKEN = "8752686767:AAGiwPVrhS2ghoEgCdmook8cJxLRuPo_UA0"
 VOLTX_API_KEY = "MHPU3S5IV1A"
-OTP_GROUP_CHAT_ID = "-1004436883235"  # আপনার সঠিক চ্যাট আইডি এখানে সেট করা হলো
+OTP_GROUP_CHAT_ID = "-1004436883235"
 
-# Voltx API Base Path from Documentation
+# Voltx API Base Path
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
 HEADERS = {
     "mauthapi": VOLTX_API_KEY
@@ -23,17 +24,16 @@ app = Flask(__name__)
 def home():
     return "FB MASTER NUMBER Bot is active and running!"
 
-# --- Voltx API & Traffic Metrics Logic ---
+# --- Voltx API Functions ---
 def fetch_voltx_traffic():
     url = f"{BASE_API_URL}/liveaccess"
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             data = response.json()
-            services = data.get("data", {}).get("services", [])
-            return services
+            return data.get("data", {}).get("services", [])
     except Exception as e:
-        print(f"Error fetching Voltx traffic: {e}")
+        print(f"Error fetching traffic: {e}")
     return []
 
 def fetch_recent_otps():
@@ -42,35 +42,31 @@ def fetch_recent_otps():
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             data = response.json()
-            otps = data.get("data", {}).get("otps", [])
-            return otps
+            return data.get("data", {}).get("otps", [])
     except Exception as e:
-        print(f"Error fetching recent OTPs: {e}")
+        print(f"Error fetching OTPs: {e}")
     return []
 
-# --- Formatting Functions ---
+# --- Formatting ---
 def format_otp_message(otp_item):
     number = otp_item.get("number", "xxxx-xxxx")
     masked_number = f"{number[:3]}****{number[-3:]}" if len(str(number)) > 6 else "xxxx-xxxx"
     message_text = otp_item.get("message", "No message")
     
-    formatted_msg = (
+    return (
         f"🚨 **NEW OTP RECEIVED** 🚨\n\n"
         f"📱 **Number:** `{masked_number}`\n"
         f"💬 **Details:** {message_text}\n\n"
         f"⚡ *Powered by FB MASTER NUMBER*"
     )
-    return formatted_msg
 
-# --- Telegram Bot Handlers ---
+# --- Telegram Handlers ---
 @bot.message_handler(commands=["start", "help"])
 def send_welcome(message):
     welcome_text = (
         "🤖 *FB MASTER NUMBER Bot Active*\n\n"
-        "Welcome to the official OTP relay and traffic management system.\n"
-        "Use the buttons below to check live traffic or request numbers."
+        "Welcome to the official OTP relay and traffic management system."
     )
-    
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
     btn_get_number = telebot.types.InlineKeyboardButton("📱 Get Number", callback_data="get_number")
     btn_otp_gc = telebot.types.InlineKeyboardButton("💬 OTP GC", url="https://t.me/smm_otp_grup")
@@ -98,29 +94,39 @@ def handle_callback(call):
         
     elif call.data == "get_number":
         bot.answer_callback_query(call.id, "Processing number request...")
-        bot.send_message(call.message.chat.id, "📱 Please use the panel or send request to allocate numbers.")
+        bot.send_message(call.message.chat.id, "📱 Please use the panel to allocate numbers.")
 
-# Function to relay OTP messages directly to the management group
-def check_and_relay_otps():
-    otps = fetch_recent_otps()
-    if otps:
-        latest_otp = otps[0]
-        formatted_msg = format_otp_message(latest_otp)
+# --- Background Worker to Auto-Relay OTPs & Ranges ---
+def background_relay_worker():
+    last_seen_otp_id = None
+    while True:
         try:
-            bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, parse_mode="Markdown")
+            otps = fetch_recent_otps()
+            if otps:
+                latest = otps[0]
+                otp_id = latest.get("otp_id") or latest.get("time")
+                
+                # নতুন ওটিপি আসলে গ্রুপে পাঠিয়ে দিবে
+                if otp_id != last_seen_otp_id:
+                    last_seen_otp_id = otp_id
+                    formatted_msg = format_otp_message(latest)
+                    bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, parse_mode="Markdown")
         except Exception as e:
-            print(f"Failed to send OTP to group: {e}")
+            print(f"Background worker error: {e}")
+        
+        time.sleep(10) # প্রতি ১০ সেকেন্ড পর পর চেক করবে
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    print("Starting Flask server and Telegram bot with Voltx API integration...")
+    print("Starting Flask, Bot, and Background Relay Worker...")
     
+    # Run Flask in a separate thread
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
-        
-    flask_thread = Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
+    Thread(target=run_flask, daemon=True).start()
+    
+    # Run Background OTP Relay Worker in a separate thread
+    Thread(target=background_relay_worker, daemon=True).start()
     
     # Start Telegram Bot Polling
     bot.infinity_polling()
