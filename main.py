@@ -1,7 +1,18 @@
+import sys
+import subprocess
+
+# সার্ভারে লাইব্রেরি না থাকলে অটোমেটিক ইনস্টল করে নেবে
+try:
+    import telebot
+    import requests
+    from flask import Flask
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyTelegramBotAPI", "requests", "flask"])
+    import telebot
+    import requests
+    from flask import Flask
+
 import time
-import requests
-import telebot
-from flask import Flask
 from threading import Thread
 
 # --- Configuration & Credentials ---
