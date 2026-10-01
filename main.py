@@ -79,43 +79,14 @@ def main_menu():
 # =========================================================
 @bot.message_handler(commands=["start"])
 def start(message):
-    user = get_user(message.from_user.id)
-
     text = (
         "👋 <b>Welcome to FB MASTER NUMBER</b>\n\n"
-        f"💰 <b>Current Balance:</b> ${user['balance']:.3f}\n"
-        f"🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\n"
-        "<i>Minimum withdraw is $0.2</i>"
-    )
-
-    inline = types.InlineKeyboardMarkup(row_width=1)
-    inline.add(
-        types.InlineKeyboardButton(
-            "💳 Withdraw via Binance",
-            callback_data="withdraw"
-        )
-    )
-    inline.add(
-        types.InlineKeyboardButton(
-            "🔴 Set Binance ID",
-            callback_data="set_binance"
-        )
-    )
-    inline.add(
-        types.InlineKeyboardButton(
-            "📣 OTP Group ↗",
-            callback_data="otp_group"
-        )
+        "<i>Please choose an option from the menu below:</i>"
     )
 
     bot.send_message(
         message.chat.id,
         text,
-        reply_markup=inline
-    )
-    bot.send_message(
-        message.chat.id,
-        "👇 <b>Main Menu</b>",
         reply_markup=main_menu()
     )
 
