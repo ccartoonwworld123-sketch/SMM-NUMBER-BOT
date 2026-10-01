@@ -258,9 +258,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     key = (r_prefix, service)
                     range_counts[key] = range_counts.get(key, 0) + 1
 
+                # Sort by count descending (highest count first) to match screenshot style
+                sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1], reverse=True)
+
                 live_text = "<b>FACEBOOK</b>\n\n📬 <b>Range List</b>\n"
-                if range_counts:
-                    for (r_prefix, service), count in list(range_counts.items())[:15]:
+                if sorted_ranges:
+                    for (r_prefix, service), count in sorted_ranges[:20]:
                         _, _, flag, _ = get_country_info(r_prefix)
                         safe_prefix = html.escape(r_prefix)
                         safe_service = html.escape(service)
