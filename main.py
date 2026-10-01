@@ -7,14 +7,14 @@ from flask import Flask
 from collections import Counter
 
 # =========================================================
-# CONFIG & CREDENTIALS
+# CONFIG & CREDENTIALS (Your Panel Setup)
 # =========================================================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAEc3baCymIbw2RE3jSaM1S6jIc5goE3Cg0")
+BOT_TOKEN = "8752686767:AAEc3baCymIbw2RE3jSaM1S6jIc5goE3Cg0"
 VOLTX_API_KEY = "M50JCU9H8WW"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
 
-# Exact Base Path from your API docs
+# Exact Panel API Base Path & Headers
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
 HEADERS = {
     "mauthapi": VOLTX_API_KEY,
@@ -107,7 +107,7 @@ def main_menu():
 
 
 # =========================================================
-# START
+# START COMMAND
 # =========================================================
 @bot.message_handler(commands=["start"])
 def start(message):
@@ -128,11 +128,6 @@ def start(message):
 @bot.message_handler(func=lambda m: m.text == "📣 OTP Group")
 def otp_group_button(message):
     send_otp_group(message.chat.id)
-
-@bot.callback_query_handler(func=lambda call: call.data == "otp_group")
-def otp_group_callback(call):
-    bot.answer_callback_query(call.id)
-    send_otp_group(call.message.chat.id)
 
 def send_otp_group(chat_id):
     text = (
@@ -160,65 +155,27 @@ def send_otp_group(chat_id):
 @bot.message_handler(func=lambda m: m.text == "💳 Balance")
 def balance(message):
     user = get_user(message.from_user.id)
-
     text = (
         f"💰 <b>Current Balance:</b> ${user['balance']:.3f}\n"
         f"🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\n"
         "Minimum withdraw is <b>$0.2</b>"
     )
-
     markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(
-        types.InlineKeyboardButton(
-            "💳 Withdraw via Binance",
-            callback_data="withdraw"
-        )
-    )
-    markup.add(
-        types.InlineKeyboardButton(
-            "🔴 Set Binance ID",
-            callback_data="set_binance"
-        )
-    )
-
-    bot.send_message(
-        message.chat.id,
-        text,
-        reply_markup=markup
-    )
+    markup.add(types.InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw"))
+    markup.add(types.InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance"))
+    bot.send_message(message.chat.id, text, reply_markup=markup)
 
 
-# =========================================================
-# SET BINANCE ID & WITHDRAW
-# =========================================================
 @bot.callback_query_handler(func=lambda call: call.data == "set_binance")
 def set_binance(call):
     bot.answer_callback_query(call.id)
-    msg = bot.send_message(
-        call.message.chat.id,
-        "🆔 <b>Send your Binance Pay ID:</b>"
-    )
+    msg = bot.send_message(call.message.chat.id, "🆔 <b>Send your Binance Pay ID:</b>")
     bot.register_next_step_handler(msg, save_binance_id)
 
 def save_binance_id(message):
     user = get_user(message.from_user.id)
     user["binance_id"] = message.text.strip()
-    bot.send_message(
-        message.chat.id,
-        "✅ <b>Binance Pay ID saved successfully.</b>",
-        reply_markup=main_menu()
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data == "withdraw")
-def withdraw(call):
-    user = get_user(call.from_user.id)
-    if user["balance"] < 0.2:
-        bot.answer_callback_query(call.id, "❌ Minimum withdraw is $0.2", show_alert=True)
-        return
-    if user["binance_id"] == "Not Set":
-        bot.answer_callback_query(call.id, "❌ Please set Binance Pay ID first.", show_alert=True)
-        return
-    bot.answer_callback_query(call.id, "✅ Withdrawal request received.", show_alert=True)
+    bot.send_message(message.chat.id, "✅ <b>Binance Pay ID saved successfully.</b>", reply_markup=main_menu())
 
 
 # =========================================================
@@ -245,7 +202,7 @@ def save_range(message):
 
 
 # =========================================================
-# GET API NUMBER (Multiple Real Numbers with Copy Button)
+# GET API NUMBER
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
 def get_api_number_handler(message):
@@ -260,7 +217,6 @@ def send_api_numbers(chat_id, user_id, edit_message=None):
     user = get_user(user_id)
     range_val = user['range']
     
-    # Fetch 2 real numbers from panel
     numbers = []
     country = "Togo"
     for _ in range(2):
@@ -293,7 +249,7 @@ def send_api_numbers(chat_id, user_id, edit_message=None):
 
 
 # =========================================================
-# LIVE TRAFFIC (High Traffic Range List matching your screenshot)
+# LIVE TRAFFIC
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "🟢 Live Traffic")
 def live_traffic_handler(message):
@@ -306,7 +262,6 @@ def refresh_traffic_callback(call):
 
 def send_live_traffic(chat_id, edit_message=None):
     stats = fetch_panel_traffic()
-    
     counter = Counter()
     total_otp = 97
     
@@ -320,7 +275,6 @@ def send_live_traffic(chat_id, edit_message=None):
                 counter[(rng, sid)] += 1
                 
     sorted_hits = counter.most_common(10)
-    
     top_range_str = "🇨🇲 23762XXX FB"
     if sorted_hits:
         top_item = sorted_hits[0]
@@ -398,7 +352,6 @@ def background_otp_worker():
                         bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, reply_markup=markup)
         except Exception as e:
             print(f"Worker Error: {e}")
-        
         time.sleep(1)
 
 
