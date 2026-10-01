@@ -31,12 +31,11 @@ def fetch_recent_otps():
     url = f"{BASE_API_URL}/success-otp"
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
-        print(f"API Response Code: {response.status_code}") # টার্মিনালে স্ট্যাটাস কোড দেখাবে
-        print(f"API Response Body: {response.text}")       # এপিআই থেকে আসলে কী ডেটা আসছে তা দেখাবে
+        print(f"API Response Code: {response.status_code}")
+        print(f"API Response Body: {response.text}")
         
         if response.status_code == 200:
             data = response.json()
-            # এখানে আপনার প্যানেলের জেসন স্ট্রাকচার অনুযায়ী 'otps' বা মূল লিস্ট খুঁজে বের করবে
             if isinstance(data, list):
                 return data
             return data.get("data", {}).get("otps", data.get("otps", []))
