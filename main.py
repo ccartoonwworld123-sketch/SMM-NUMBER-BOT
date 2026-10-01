@@ -11,8 +11,8 @@ VOLTX_API_KEY = "MHPU3S5IV1A"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
 YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
 
-# Apnar OTP group er chat id ekhane bosan (jemon: "-1001234567890")
-OTP_GROUP_CHAT_ID = os.environ.get("OTP_GROUP_CHAT_ID", "-100xxxxxxxxx") 
+# আপনার গ্রুপের সঠিক Chat ID এখানে বসানো হলো
+OTP_GROUP_CHAT_ID = os.environ.get("OTP_GROUP_CHAT_ID", "-1002340808169") 
 
 USER_STATES = {}
 USER_RANGES = {}
@@ -255,7 +255,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     live_text += "No recent traffic found in console."
                 await update.message.reply_text(live_text, parse_mode="HTML")
             else:
-                await update.message.reply_text("⚠️ Failed to fetch live traffic from panel.")
+                await update.message.reply_text("⚠️️ Failed to fetch live traffic from panel.")
         except Exception as e:
             await update.message.reply_text(f"⚠️ Error fetching live traffic: {e}")
 
