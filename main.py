@@ -7,7 +7,7 @@ from threading import Thread
 # --- Configuration & Credentials ---
 BOT_TOKEN = "8752686767:AAGiwPVrhS2ghoEgCdmook8cJxLRuPo_UA0"
 VOLTX_API_KEY = "MHPU3S5IV1A"
-OTP_GROUP_CHAT_ID = "@smm_otp_grup"
+OTP_GROUP_CHAT_ID = "-1004436883235"  # আপনার সঠিক চ্যাট আইডি এখানে সেট করা হলো
 
 # Voltx API Base Path from Documentation
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
@@ -25,15 +25,11 @@ def home():
 
 # --- Voltx API & Traffic Metrics Logic ---
 def fetch_voltx_traffic():
-    """
-    Voltx API থেকে liveaccess এন্ডপয়েন্ট ব্যবহার করে লাইভ ট্রাফিক এবং রেঞ্জ ফেচ করে।
-    """
     url = f"{BASE_API_URL}/liveaccess"
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
             data = response.json()
-            # API ডকুমেন্টেশন অনুযায়ী services ডেটা পার্স করা
             services = data.get("data", {}).get("services", [])
             return services
     except Exception as e:
@@ -41,9 +37,6 @@ def fetch_voltx_traffic():
     return []
 
 def fetch_recent_otps():
-    """
-    Voltx API থেকে সফল বা সাম্প্রতিক ওটিপি ফেচ করে।
-    """
     url = f"{BASE_API_URL}/success-otp"
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
@@ -57,9 +50,6 @@ def fetch_recent_otps():
 
 # --- Formatting Functions ---
 def format_otp_message(otp_item):
-    """
-    প্রফেশনাল লেআউটে ওটিপি মেসেজ ফরম্যাট করে।
-    """
     number = otp_item.get("number", "xxxx-xxxx")
     masked_number = f"{number[:3]}****{number[-3:]}" if len(str(number)) > 6 else "xxxx-xxxx"
     message_text = otp_item.get("message", "No message")
@@ -114,7 +104,6 @@ def handle_callback(call):
 def check_and_relay_otps():
     otps = fetch_recent_otps()
     if otps:
-        # Latest OTP relay logic example
         latest_otp = otps[0]
         formatted_msg = format_otp_message(latest_otp)
         try:
