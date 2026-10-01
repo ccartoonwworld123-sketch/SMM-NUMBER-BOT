@@ -236,19 +236,33 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if res.status_code == 200:
                 data = res.json().get("data", {})
                 hits = data.get("hits", []) or []
-                live_text = "🟢 <b>Live Traffic Console (Recent Hits):</b>\n\n"
-                if hits:
-                    for h in hits[:5]:
-                        num = str(h.get("number", "N/H"))
-                        msg = str(h.get("message", "N/A"))[:30]
-                        safe_num = html.escape(num)
-                        safe_msg = html.escape(msg)
-                        live_text += f"📱 <code>{safe_num}</code>\n💬 {safe_msg}\n────────────────\n"
+                
+                range_counts = {}
+                for h in hits:
+                    num = str(h.get("number", "") or h.get("phone", "") or h.get("full_number", ""))
+                    clean_num = ''.join(filter(str.isdigit, num))
+                    if len(clean_num) >= 5:
+                        r_prefix = clean_num[:5] + "XXX"
+                    else:
+                        r_prefix = "UNKNOWN"
+                    
+                    service = str(h.get("app", "") or h.get("service", "FACEBOOK")).upper()
+                    key = (r_prefix, service)
+                    range_counts[key] = range_counts.get(key, 0) + 1
+
+                live_text = "<b>FACEBOOK</b>\n\n📬 <b>Range List</b>\n"
+                if range_counts:
+                    for (r_prefix, service), count in list(range_counts.items())[:15]:
+                        _, _, flag, _ = get_country_info(r_prefix)
+                        safe_prefix = html.escape(r_prefix)
+                        safe_service = html.escape(service)
+                        live_text += f"• {flag} <code>{safe_prefix}</code> - {safe_service} - {count}\n"
                 else:
                     live_text += "No recent traffic found in console."
+                
                 await update.message.reply_text(live_text, parse_mode="HTML")
             else:
-                await update.message.reply_text("⚠️ Failed to fetch live traffic from panel.")
+                await update.message.reply_text("⚠️️ Failed to fetch live traffic from panel.")
         except Exception as e:
             await update.message.reply_text(f"⚠️ Error fetching live traffic: {e}")
 
