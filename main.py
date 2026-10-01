@@ -1,7 +1,7 @@
 import os
 import asyncio
 import requests
-import re
+import html
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, CopyTextButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
@@ -63,10 +63,9 @@ async def get_voltx_real_number(target_range="22896"):
 def _sync_check_voltx_otp(target_phone, order_id):
     headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
     clean_target = ''.join(filter(str.isdigit, str(target_phone)))
-    short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=1.5)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
             res_json = res.json()
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
@@ -78,7 +77,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
                     
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
-                    if short_target in clean_num or short_target in msg or (clean_target and clean_target in clean_num):
+                    if (clean_target and clean_target in clean_num) or (clean_num and clean_num in clean_target) or (order_id and str(order_id) in str(hit.get("id", ""))):
                         if msg:
                             extracted_range = hit.get("range") or hit.get("rid") or hit.get("prefix") or ""
                             if not extracted_range and len(clean_num) >= 5:
@@ -88,7 +87,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
         print(f"Console Check Error: {e}")
 
     try:
-        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=1.5)
+        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
         if res.status_code == 200:
             res_json = res.json()
             otps = res_json.get("data", {}).get("otps", []) or res_json.get("data", []) or res_json.get("otps", [])
@@ -101,7 +100,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
                     
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
-                    if short_target in clean_num or short_target in msg or (order_id and str(order_id) in oid):
+                    if (clean_target and clean_target in clean_num) or (clean_num and clean_num in clean_target) or (order_id and str(order_id) in oid):
                         if msg:
                             item_range = item.get("range") or item.get("rid") or ""
                             if not item_range and len(clean_num) >= 5:
@@ -148,6 +147,7 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
                 else:
                     final_range = raw_r + "XXX"
                 
+                safe_msg = html.escape(full_msg)
                 otp_message = (
                     f"<b>OTP</b>                         <b>Admin</b>\n"
                     f"<b>f FB LITE OTP RECEIVE</b>\n"
@@ -157,7 +157,7 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
                     f"🗣 <b>Language :</b> {lang}\n"
                     f"────────────────────────\n"
                     f"✉️ <b>Message :</b>\n"
-                    f"<code>{full_msg}</code>"
+                    f"<code>{safe_msg}</code>"
                 )
                 
                 group_markup = InlineKeyboardMarkup([
@@ -239,9 +239,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 live_text = "🟢 <b>Live Traffic Console (Recent Hits):</b>\n\n"
                 if hits:
                     for h in hits[:5]:
-                        num = h.get("number", "N/H")
-                        msg = h.get("message", "N/A")[:30]
-                        live_text += f"📱 <code>{num}</code>\n💬 {msg}\n────────────────\n"
+                        num = str(h.get("number", "N/H"))
+                        msg = str(h.get("message", "N/A"))[:30]
+                        safe_num = html.escape(num)
+                        safe_msg = html.escape(msg)
+                        live_text += f"📱 <code>{safe_num}</code>\n💬 {safe_msg}\n────────────────\n"
                 else:
                     live_text += "No recent traffic found in console."
                 await update.message.reply_text(live_text, parse_mode="HTML")
