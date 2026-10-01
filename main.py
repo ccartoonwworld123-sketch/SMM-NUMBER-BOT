@@ -47,18 +47,24 @@ def fetch_recent_otps():
         print(f"Error fetching OTPs: {e}")
     return []
 
-# --- Formatting OTP ---
+# --- Formatting OTP like Panel Live Console ---
 def format_otp_message(otp_item):
-    number = otp_item.get("number", "xxxx-xxxx")
-    masked_number = f"{number[:3]}****{number[-3:]}" if len(str(number)) > 6 else "xxxx-xxxx"
-    message_text = otp_item.get("message", "No message")
-    
-    return (
-        f"🚨 **NEW OTP RECEIVED** 🚨\n\n"
-        f"📱 **Number:** `{masked_number}`\n"
-        f"💬 **Details:** {message_text}\n\n"
-        f"⚡ *Powered by FB MASTER NUMBER*"
+    service = otp_item.get("service", otp_item.get("sid", "FACEBOOK"))
+    number = otp_item.get("number", "xxxxxxx")
+    message_text = otp_item.get("message", "No message content")
+    time_str = otp_item.get("time", "")
+    operator = otp_item.get("operator", "MOBILE")
+    country = otp_item.get("country", "")
+
+    # Panel er layout er moto kore sajano holo
+    formatted_msg = (
+        f"🔹 **{service}**  `{number}`\n"
+        f"💬 {message_text}\n"
     )
+    if time_str or country:
+        formatted_msg += f"🕒 `{time_str}`  |  🌐 *{operator}* {country}"
+        
+    return formatted_msg
 
 # --- Telegram Handlers ---
 @bot.message_handler(commands=["start", "help"])
@@ -86,7 +92,6 @@ def handle_callback(call):
         else:
             response_text = "📥 **Range List**\n"
             for item in traffic_data:
-                # আপনার স্ক্রিনশটের মতো করে রেঞ্জ, সার্ভিস এবং কাউন্ট সাজানো হলো
                 flag = item.get('flag', '🌐')
                 ranges = item.get('range', item.get('ranges', 'N/A'))
                 if isinstance(ranges, list):
@@ -102,7 +107,7 @@ def handle_callback(call):
         bot.answer_callback_query(call.id, "Processing number request...")
         bot.send_message(call.message.chat.id, "📱 Please use the panel to allocate numbers.")
 
-# --- Background Worker to Auto-Relay OTPs ---
+# --- Background Worker to Auto-Relay OTPs to Group ---
 def background_relay_worker():
     last_seen_otp_id = None
     while True:
@@ -110,8 +115,9 @@ def background_relay_worker():
             otps = fetch_recent_otps()
             if otps:
                 latest = otps[0]
-                otp_id = latest.get("otp_id") or latest.get("time")
+                otp_id = latest.get("otp_id") or latest.get("time") or latest.get("number")
                 
+                # Jodi notun otp ase tahole group-e pathabe
                 if otp_id != last_seen_otp_id:
                     last_seen_otp_id = otp_id
                     formatted_msg = format_otp_message(latest)
@@ -119,7 +125,7 @@ def background_relay_worker():
         except Exception as e:
             print(f"Background worker error: {e}")
         
-        time.sleep(10)
+        time.sleep(5) # protich 5 second por por check korbe
 
 # --- Main Execution ---
 if __name__ == "__main__":
