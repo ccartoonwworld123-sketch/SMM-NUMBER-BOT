@@ -47,7 +47,7 @@ def fetch_recent_otps():
         print(f"Error fetching OTPs: {e}")
     return []
 
-# --- Formatting ---
+# --- Formatting OTP ---
 def format_otp_message(otp_item):
     number = otp_item.get("number", "xxxx-xxxx")
     masked_number = f"{number[:3]}****{number[-3:]}" if len(str(number)) > 6 else "xxxx-xxxx"
@@ -68,9 +68,9 @@ def send_welcome(message):
         "Welcome to the official OTP relay and traffic management system."
     )
     markup = telebot.types.InlineKeyboardMarkup(row_width=2)
-    btn_get_number = telebot.types.InlineKeyboardButton("📱 Get Number", callback_data="get_number")
-    btn_otp_gc = telebot.types.InlineKeyboardButton("💬 OTP GC", url="https://t.me/smm_otp_grup")
-    btn_get_range = telebot.types.InlineKeyboardButton("📊 Get Range", callback_data="get_range")
+    btn_get_number = telebot.types.InlineKeyboardButton("📱 Get API Number", callback_data="get_number")
+    btn_otp_gc = telebot.types.InlineKeyboardButton("📢 OTP Group", url="https://t.me/smm_otp_grup")
+    btn_get_range = telebot.types.InlineKeyboardButton("🟢 Live Traffic", callback_data="get_range")
     markup.add(btn_get_number, btn_otp_gc, btn_get_range)
     
     bot.send_message(message.chat.id, welcome_text, parse_mode="Markdown", reply_markup=markup)
@@ -82,13 +82,19 @@ def handle_callback(call):
         traffic_data = fetch_voltx_traffic()
         
         if not traffic_data:
-            response_text = "📊 *Live Traffic Metrics*\n\nNo active traffic currently found."
+            response_text = "📊 *Live Traffic*\n\nNo active traffic currently found."
         else:
-            response_text = "📊 *Live Traffic Metrics (Voltx)*\n\n"
+            response_text = "📥 **Range List**\n"
             for item in traffic_data:
-                sid = item.get('sid', 'Unknown')
-                ranges = ", ".join(item.get('ranges', []))
-                response_text += f"• **Service:** {sid}\n  **Ranges:** {ranges}\n\n"
+                # আপনার স্ক্রিনশটের মতো করে রেঞ্জ, সার্ভিস এবং কাউন্ট সাজানো হলো
+                flag = item.get('flag', '🌐')
+                ranges = item.get('range', item.get('ranges', 'N/A'))
+                if isinstance(ranges, list):
+                    ranges = ", ".join(ranges)
+                service = item.get('service', item.get('sid', 'FACEBOOK'))
+                count = item.get('count', item.get('total', '1'))
+                
+                response_text += f"• {flag} `{ranges}` - **{service}** - {count}\n"
                 
         bot.send_message(call.message.chat.id, response_text, parse_mode="Markdown")
         
@@ -96,7 +102,7 @@ def handle_callback(call):
         bot.answer_callback_query(call.id, "Processing number request...")
         bot.send_message(call.message.chat.id, "📱 Please use the panel to allocate numbers.")
 
-# --- Background Worker to Auto-Relay OTPs & Ranges ---
+# --- Background Worker to Auto-Relay OTPs ---
 def background_relay_worker():
     last_seen_otp_id = None
     while True:
@@ -106,7 +112,6 @@ def background_relay_worker():
                 latest = otps[0]
                 otp_id = latest.get("otp_id") or latest.get("time")
                 
-                # নতুন ওটিপি আসলে গ্রুপে পাঠিয়ে দিবে
                 if otp_id != last_seen_otp_id:
                     last_seen_otp_id = otp_id
                     formatted_msg = format_otp_message(latest)
@@ -114,19 +119,16 @@ def background_relay_worker():
         except Exception as e:
             print(f"Background worker error: {e}")
         
-        time.sleep(10) # প্রতি ১০ সেকেন্ড পর পর চেক করবে
+        time.sleep(10)
 
 # --- Main Execution ---
 if __name__ == "__main__":
     print("Starting Flask, Bot, and Background Relay Worker...")
     
-    # Run Flask in a separate thread
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
     
-    # Run Background OTP Relay Worker in a separate thread
     Thread(target=background_relay_worker, daemon=True).start()
     
-    # Start Telegram Bot Polling
     bot.infinity_polling()
