@@ -8,7 +8,7 @@ from flask import Flask
 # =========================================================
 # CONFIG & CREDENTIALS
 # =========================================================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAEc3baCymIbw2RE3jSaM1S6jIc5goE3Cg0")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAGbez-t_ZhrsEbp79Wd1oYM4avQ9j1dP8Q")
 VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
