@@ -7,11 +7,10 @@ from threading import Thread
 import os
 
 # --- Configuration & Credentials ---
-# Environment variable theke token nibe, nahoy direct bosbe
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAEKH4RRI6jWzinLnpDEdah-OtWhG4h-Bb0")
 VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
-OTP_GROUP_LINK = "https://t.me/QV_NUMBER_OTP"
+OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
 
 # Voltx API Base Path
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
@@ -81,8 +80,9 @@ def handle_menu_clicks(message):
 
     if text == "Get API Number":
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📋 +22896234416", callback_data="copy_num"))
-        markup.add(types.InlineKeyboardButton("📋 +22896161787", callback_data="copy_num"))
+        # 📋 আইকনটি সরিয়ে দেওয়া হয়েছে
+        markup.add(types.InlineKeyboardButton("+22896234416", callback_data="copy_num"))
+        markup.add(types.InlineKeyboardButton("+22896161787", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_num"))
         
         number_info = "🌐 Country : Togo\n⚙️ Range : 22896"
@@ -180,7 +180,7 @@ if __name__ == "__main__":
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
     
-    Thread(target=background_relay_worker, daemon=Thread).start() # Fixed typo here or keep standard
+    Thread(target=background_relay_worker, daemon=True).start()
     
     print("Bot is starting polling...")
     bot.infinity_polling(skip_pending=True)
