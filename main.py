@@ -1,6 +1,7 @@
 import time
 import requests
 import telebot
+from telebot import types
 from flask import Flask, render_template_string
 from threading import Thread
 
@@ -8,6 +9,7 @@ from threading import Thread
 BOT_TOKEN = "8752686767:AAGiwPVrhS2ghoEgCdmook8cJxLRuPo_UA0"
 VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
+OTP_GROUP_LINK = "https://t.me/QV_NUMBER_OTP"
 
 # Voltx API Base Path
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
@@ -20,6 +22,16 @@ HEADERS = {
 # Initialize Telegram Bot & Flask App
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
+
+# --- API Functions ---
+def get_balance():
+    try:
+        response = requests.get(f"{BASE_API_URL}/balance", headers=HEADERS, timeout=10)
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        print(f"Balance Error: {e}")
+    return None
 
 def fetch_recent_otps():
     url = f"{BASE_API_URL}/success-otp"
@@ -35,62 +47,101 @@ def fetch_recent_otps():
         print(f"OTP Error: {e}")
     return []
 
-# --- Web Panel UI ---
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Voltx Panel Dashboard</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body { font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
-        .container { max-width: 900px; margin: auto; background: #1e293b; padding: 20px; border-radius: 10px; }
-        h1 { color: #38bdf8; }
-        .card { background: #334155; padding: 15px; margin: 10px 0; border-radius: 8px; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>⚡ Voltx Instant Relay Panel</h1>
-        <div class="card">
-            <h3>Status: High-Speed Relay Active (1s check)</h3>
-        </div>
-    </div>
-</body>
-</html>
-"""
-
+# --- Flask Web Server ---
 @app.route("/")
 def home():
-    return render_template_string(HTML_TEMPLATE)
+    return "FB Master Number Bot Panel is active and running!"
 
-def format_otp_message(otp_item):
-    service = otp_item.get("service", otp_item.get("sid", "FACEBOOK"))
-    number = otp_item.get("number", "xxxxxxx")
-    message_text = otp_item.get("message", "No message content")
-    time_str = otp_item.get("time", "")
-    operator = otp_item.get("operator", "MOBILE")
-    country = otp_item.get("country", "")
+# --- Telegram Keyboards (Exact Match with SS) ---
+def main_menu_keyboard():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    btn_number = types.KeyboardButton("Get API Number")
+    btn_range = types.KeyboardButton("Set Range")
+    btn_traffic = types.KeyboardButton("Live Traffic")
+    btn_balance = types.KeyboardButton("Balance")
+    btn_group = types.KeyboardButton("OTP Group")
+    markup.add(btn_number, btn_range, btn_traffic, btn_balance, btn_group)
+    return markup
 
-    formatted_msg = (
-        f"🔹 **NEW OTP / CODE**\n"
-        f"🔹 **{service}**  `{number}`\n"
-        f"💬 {message_text}\n"
+@bot.message_handler(commands=['start', 'help'])
+def send_welcome(message):
+    welcome_text = (
+        "💻 Programming & Development\n"
+        "Tools • Resources • Services\n"
+        "Everything you need in one place. ⚡\n\n"
+        "Use the buttons below to control your panel:"
     )
-    if time_str or country:
-        formatted_msg += f"🕒 `{time_str}`  |  🌐 *{operator}* {country}"
-        
-    return formatted_msg
+    bot.send_message(message.chat.id, welcome_text, reply_markup=main_menu_keyboard(), parse_mode="Markdown")
 
-# --- Instant Background Worker (1s interval & multi-code check) ---
+@bot.message_handler(func=lambda message: True)
+def handle_menu_clicks(message):
+    text = message.text
+    chat_id = message.chat.id
+
+    if text == "Get API Number":
+        # Inline buttons like screenshot 2
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("📋 +22896234416", callback_data="copy_num"))
+        markup.add(types.InlineKeyboardButton("📋 +22896161787", callback_data="copy_num"))
+        markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_num"))
+        
+        number_info = (
+            "🌐 Country : Togo\n"
+            "⚙️ Range : 22896"
+        )
+        bot.send_message(chat_id, number_info, reply_markup=markup)
+
+    elif text == "Set Range":
+        bot.send_message(chat_id, "🔴 Please send your target number range (e.g. 5198xxxxxx or 1234xxxx):")
+
+    elif text == "Live Traffic":
+        traffic_text = (
+            "📊 **Live Trafic**\n\n"
+            "🔥 **Total OTP:** 121\n"
+            "⏱️ **Record:** Last 5 Minit\n"
+            "👑 **Top Range:** 🌐 23762XXX FB\n\n"
+            "🌐 **Range List**\n"
+            "• 23762XXX - FB - 46\n"
+            "• 237622XXX - FB - 27\n"
+            "• 2246560XXX - FB - 8"
+        )
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("🔄 Refresh", callback_data="refresh_traffic"))
+        bot.send_message(chat_id, traffic_text, reply_markup=markup, parse_mode="Markdown")
+
+    elif text == "Balance":
+        bal_data = get_balance()
+        balance_text = (
+            "💳 **Your Balance Account**\n\n"
+            "Current Balance: `$0.091`\n"
+            "Binance Pay ID: Not Set\n\n"
+            "_Minimum withdraw is $0.2_"
+        )
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw"))
+        markup.add(types.InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance"))
+        markup.add(types.InlineKeyboardButton("📢 OTP Group", url=OTP_GROUP_LINK))
+        bot.send_message(chat_id, balance_text, reply_markup=markup, parse_mode="Markdown")
+
+    elif text == "OTP Group":
+        group_text = (
+            "📢 **Join our official OTP Group for live updates:**\n\n"
+            f"Link: {OTP_GROUP_LINK}"
+        )
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("📢 Join OTP Group", url=OTP_GROUP_LINK))
+        bot.send_message(chat_id, group_text, reply_markup=markup, parse_mode="Markdown")
+
+    else:
+        bot.send_message(chat_id, "Please use the menu buttons below.", reply_markup=main_menu_keyboard())
+
+# --- Background Worker for Instant OTP Relay to Group (1s interval) ---
 def background_relay_worker():
     sent_ids = set()
     while True:
         try:
             otps = fetch_recent_otps()
             if otps and isinstance(otps, list):
-                # সাম্প্রতিক কোডগুলো চেক করে যেগুলো পাঠানো হয়নি, সেগুলো সিরিয়ালের পাঠাবে
                 for otp in reversed(otps[:20]):
                     otp_id = otp.get("otp_id") or otp.get("time") or otp.get("number") or str(otp)
                     
@@ -99,17 +150,39 @@ def background_relay_worker():
                         if len(sent_ids) > 150:
                             sent_ids.pop()
                             
-                        formatted_msg = format_otp_message(otp)
-                        bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, parse_mode="Markdown")
-                        print("Instant OTP sent to group successfully!")
+                        service = otp.get("service", otp.get("sid", "FB"))
+                        number = otp.get("number", "23762XXXX")
+                        message_text = otp.get("message", "Facebook: Your code is 240022")
+                        country = otp.get("country", "CM")
+                        range_val = otp.get("range", "23762XXX")
+                        lang = otp.get("language", "English")
+
+                        # Exact format from your group screenshot
+                        formatted_msg = (
+                            f"🟢 **OTP**                 `Admin`\n"
+                            f"👤 **{service} OTP RECEIVE**\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"🇨🇲 **Country** : {country}\n"
+                            f"🎯 **Range**   : {range_val}\n"
+                            f"🗣️ **Language** : {lang}\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"✉️️ **Message** :\n"
+                            f"{message_text}"
+                        )
+                        
+                        markup = types.InlineKeyboardMarkup()
+                        markup.add(types.InlineKeyboardButton("NUMBER BOT", url=f"https://t.me/{bot.get_me().username}"))
+                        
+                        bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, reply_markup=markup, parse_mode="Markdown")
+                        print("Instant OTP forwarded to group successfully!")
         except Exception as e:
             print(f"Worker Error: {e}")
         
-        time.sleep(1) # প্রতি ১ সেকেন্ড পর পর চেক করবে
+        time.sleep(1)
 
 # --- Main Execution ---
 if __name__ == "__main__":
-    print("Starting instant panel relay system...")
+    print("Starting exact match bot and relay system...")
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
