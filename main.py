@@ -211,7 +211,7 @@ def withdraw(call):
 # =========================================================
 # SET RANGE
 # =========================================================
-@bot.message_handler(func=lambda m: m.text == "⚙️️ Set Range")
+@bot.message_handler(func=lambda m: m.text == "⚙️ Set Range")
 def set_range(message):
     msg = bot.send_message(
         message.chat.id,
@@ -232,21 +232,20 @@ def save_range(message):
 
 
 # =========================================================
-# GET API NUMBER (Clean text formatting for easy copy)
+# GET API NUMBER
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
 def get_api_number(message):
     user = get_user(message.from_user.id)
 
     text = (
-        "🌐 <b>Country:</b> Togo 🇹🇬\n"
-        f"⚙️ <b>Range:</b> {user['range']}\n\n"
-        "📱 <b>Available Numbers:</b>\n"
-        "<code>+22896234416</code>\n"
-        "<code>+22896161787</code>"
+        f"🌐 <b>Country :</b> Togo 🇹🇬\n"
+        f"⚙️ <b>Range   :</b> {user['range']}"
     )
 
     markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(types.InlineKeyboardButton("❏ +22896234416", callback_data="copy_+22896234416"))
+    markup.add(types.InlineKeyboardButton("❏ +22896161787", callback_data="copy_+22896161787"))
     markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_number"))
 
     bot.send_message(
@@ -259,6 +258,11 @@ def get_api_number(message):
 # =========================================================
 # NUMBER BUTTONS & CHANGE NUMBER
 # =========================================================
+@bot.callback_query_handler(func=lambda call: call.data.startswith("copy_"))
+def copy_number_callback(call):
+    number = call.data.replace("copy_", "")
+    bot.answer_callback_query(call.id, text=f"Copied: {number}", show_alert=True)
+
 @bot.callback_query_handler(func=lambda call: call.data == "change_number")
 def change_number(call):
     bot.answer_callback_query(call.id, "Number changed.")
@@ -340,8 +344,8 @@ if __name__ == "__main__":
         app.run(host="0.0.0.0", port=8080)
 
     Thread(target=run_flask, daemon=True).start()
-    Thread(target=background_otp_vector := Thread(target=background_otp_worker, daemon=True)).start() # simplified thread start
-    
-    # Let's fix the thread start cleanly:
-    # Thread(target=background_otp_worker, daemon=True).start()
+    Thread(target=background_otp_worker, daemon=True).start()
 
+    print("🤖 Bot and Web Server are running...")
+    bot.remove_webhook()
+    bot.infinity_polling(skip_pending=True, interval=1, timeout=20)
