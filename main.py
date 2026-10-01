@@ -11,8 +11,8 @@ VOLTX_API_KEY = "MHPU3S5IV1A"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
 YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
 
-# আপনার ওটিপি গ্রুপের আইডি এখানে বসান (যেমন: "-1001234567890")
-OTP_GROUP_CHAT_ID = os.environ.get("OTP_GROUP_CHAT_ID", "") 
+# Apnar OTP group er chat id ekhane bosan (jemon: "-1001234567890")
+OTP_GROUP_CHAT_ID = os.environ.get("OTP_GROUP_CHAT_ID", "-100xxxxxxxxx") 
 
 USER_STATES = {}
 USER_RANGES = {}
@@ -20,22 +20,22 @@ USER_RANGES = {}
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
     
-    if clean_num.startswith("228"): return "Togo", "TG", "🇹🇬", "Français"
-    elif clean_num.startswith("225"): return "Ivory Coast", "CI", "🇨🇮", "Français"
-    elif clean_num.startswith("237"): return "Cameroon", "CM", "🇨🇲", "Français"
-    elif clean_num.startswith("229"): return "Benin", "BJ", "🇧🇯", "Français"
-    elif clean_num.startswith("255"): return "Tanzania", "TZ", "🇹🇿", "English"
-    elif clean_num.startswith("266"): return "Lesotho", "LS", "🇱🇸", "English"
-    elif clean_num.startswith("380"): return "Ukraine", "UA", "🇺🇦", "Ukrainian"
-    elif clean_num.startswith("224"): return "Guinea", "GN", "🇬🇳", "Français"
-    elif clean_num.startswith("996"): return "Kyrgyzstan", "KG", "🇰🇬", "Russian"
-    elif clean_num.startswith("43"): return "Austria", "AT", "🇦🇹", "German"
-    elif clean_num.startswith("39"): return "Italy", "IT", "🇮🇹", "Italian"
-    elif clean_num.startswith("201") or clean_num.startswith("20"): return "Egypt", "EG", "🇪🇬", "Arabic"
-    elif clean_num.startswith("232"): return "Sierra Leone", "SL", "🇸🇱", "English"
-    elif clean_num.startswith("880"): return "Bangladesh", "BD", "🇧🇩", "Bengali"
-    elif clean_num.startswith("91"): return "India", "IN", "🇮🇳", "English"
-    else: return "International", "INT", "🌍", "English"
+    if clean_num.startswith("228"): return "Togo", "TG", "TG", "Francais"
+    elif clean_num.startswith("225"): return "Ivory Coast", "CI", "CI", "Francais"
+    elif clean_num.startswith("237"): return "Cameroon", "CM", "CM", "Francais"
+    elif clean_num.startswith("229"): return "Benin", "BJ", "BJ", "Francais"
+    elif clean_num.startswith("255"): return "Tanzania", "TZ", "TZ", "English"
+    elif clean_num.startswith("266"): return "Lesotho", "LS", "LS", "English"
+    elif clean_num.startswith("380"): return "Ukraine", "UA", "UA", "Ukrainian"
+    elif clean_num.startswith("224"): return "Guinea", "GN", "GN", "Francais"
+    elif clean_num.startswith("996"): return "Kyrgyzstan", "KG", "KG", "Russian"
+    elif clean_num.startswith("43"): return "Austria", "AT", "AT", "German"
+    elif clean_num.startswith("39"): return "Italy", "IT", "IT", "Italian"
+    elif clean_num.startswith("201") or clean_num.startswith("20"): return "Egypt", "EG", "EG", "Arabic"
+    elif clean_num.startswith("232"): return "Sierra Leone", "SL", "SL", "English"
+    elif clean_num.startswith("880"): return "Bangladesh", "BD", "BD", "Bengali"
+    elif clean_num.startswith("91"): return "India", "IN", "IN", "English"
+    else: return "International", "INT", "INT", "English"
 
 def _sync_get_voltx_real_number(target_range):
     headers = {
@@ -83,7 +83,6 @@ def _sync_check_voltx_otp(target_phone, order_id):
                         if msg:
                             extracted_range = hit.get("range") or hit.get("rid") or hit.get("prefix") or ""
                             if not extracted_range and len(clean_num) >= 5:
-                                # আপনার স্ক্রিনশটের মতো সঠিক ফরম্যাটে রেঞ্জ তৈরি (যেমন: 22896XXX বা 25565XXX)[span_5](start_span)[span_5](end_span)
                                 extracted_range = clean_num[:5] + "XXX"
                             return msg, str(extracted_range)
     except Exception as e:
@@ -138,7 +137,6 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
             if full_msg:
                 country_name, country_code, flag, lang = get_country_info(phone)
                 
-                # রেঞ্জ নিখুঁتভাবে সাজানো যাতে সবসময় স্ক্রিনশটের মতো XXX সহ দেখায়[span_6](start_span)[span_6](end_span)
                 if detected_range and detected_range != "None" and detected_range != "":
                     raw_r = detected_range.upper().replace("XXX", "").replace("X", "").strip()
                 elif user_range:
@@ -146,7 +144,6 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
                 else:
                     raw_r = phone[:5]
                 
-                # ৫ বা ৬ ডিজিট ঠিক রেখে শেষে XXX যুক্ত করা
                 if len(raw_r) >= 5:
                     final_range = raw_r[:5] + "XXX"
                 else:
@@ -156,7 +153,7 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
                     f"<b>OTP</b>                         <b>Admin</b>\n"
                     f"<b>f FB LITE OTP RECEIVE</b>\n"
                     f"────────────────────────\n"
-                    f"{flag} <b>Country :</b> {country_code}\n"
+                    f"{country_code} <b>Country :</b> {country_code}\n"
                     f"🎯 <b>Range :</b> <code>{final_range}</code>\n"
                     f"🗣 <b>Language :</b> {lang}\n"
                     f"────────────────────────\n"
@@ -190,7 +187,7 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙ Set Range"],
+        ["📞 Get API Number", "⚙️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
@@ -201,20 +198,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
-        USER_STATES[user_id] = None
-
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
         clean_text = text.strip()
         if "x" in clean_text.lower() or clean_text.isdigit():
             USER_STATES[user_id] = None
             USER_RANGES[user_id] = clean_text
-            await update.message.reply_text(f"🔴 Target range updated to: <b>{clean_text}</b>", parse_mode="HTML")
+            await update.message.reply_text(f"🔴 Target range updated successfully to: <b>{clean_text}</b>", parse_mode="HTML")
         else:
             await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
         return
 
     if text == "📞 Get API Number":
+        USER_STATES[user_id] = None
         user_range = USER_RANGES.get(user_id, "22896")
         numbers = []
         orders = []
@@ -243,9 +238,29 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
 
     elif text == "🟢 Live Traffic":
-        await update.message.reply_text("Fetching live traffic...", parse_mode="HTML")
+        USER_STATES[user_id] = None
+        try:
+            headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
+            res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
+            if res.status_code == 200:
+                data = res.json().get("data", {})
+                hits = data.get("hits", []) or []
+                live_text = "🟢 <b>Live Traffic Console (Recent Hits):</b>\n\n"
+                if hits:
+                    for h in hits[:5]:
+                        num = h.get("number", "N/H")
+                        msg = h.get("message", "N/A")[:30]
+                        live_text += f"📱 <code>{num}</code>\n💬 {msg}\n────────────────\n"
+                else:
+                    live_text += "No recent traffic found in console."
+                await update.message.reply_text(live_text, parse_mode="HTML")
+            else:
+                await update.message.reply_text("⚠️ Failed to fetch live traffic from panel.")
+        except Exception as e:
+            await update.message.reply_text(f"⚠️ Error fetching live traffic: {e}")
 
     elif text == "💳 Balance":
+        USER_STATES[user_id] = None
         balance_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw_binance")],
             [InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
@@ -254,6 +269,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
 
     elif text == "📣 OTP Group":
+        USER_STATES[user_id] = None
         await update.message.reply_text(f"📣 Join our OTP Group: t.me/{YOUR_TELEGRAM_USERNAME}")
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
