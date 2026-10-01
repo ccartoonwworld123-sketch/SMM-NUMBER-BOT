@@ -9,7 +9,7 @@ from flask import Flask
 # CONFIG & CREDENTIALS
 # =========================================================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAG6ny1a2IXUBBoA73grUKxqfggTi4wS44Y")
-VOLTX_API_KEY = "MNFO9XZGN7E"
+VOLTX_API_KEY = "https://api.2009.cloud/MXS47FLFXOU/tnevs/@public/api/getnum"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
 
