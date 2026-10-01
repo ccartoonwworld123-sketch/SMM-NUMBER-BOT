@@ -132,7 +132,7 @@ def handle_menu_clicks(message):
 # --- Background Worker for Instant OTP Relay (1s interval) ---
 def background_relay_worker():
     sent_ids = set()
-    time.sleep(5) # সার্ভার পুরোপুরি স্টার্ট হওয়ার জন্য ৫ সেকেন্ড অপেক্ষা করবে
+    time.sleep(5)
     while True:
         try:
             otps = fetch_recent_otps()
@@ -174,14 +174,11 @@ def background_relay_worker():
         time.sleep(1)
 
 if __name__ == "__main__":
-    # Flask সার্ভার ব্যাকগ্রাউন্ডে রান হবে
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
     
-    # ওটিপি রিলে ওয়ার্কার চালু হবে
     Thread(target=background_relay_worker, daemon=True).start()
     
-    # বট পোলিং শুরু হবে
     print("Bot is starting polling...")
     bot.infinity_polling(skip_pending=True)
