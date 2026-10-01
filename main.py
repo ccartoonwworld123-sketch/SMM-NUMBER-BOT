@@ -2,6 +2,7 @@ import time
 import requests
 import telebot
 from telebot import types
+from flask import Flask
 from threading import Thread
 import os
 
@@ -19,8 +20,9 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-# Initialize Telegram Bot
+# Initialize Telegram Bot & Flask App
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
+app = Flask(__name__)
 
 def get_balance():
     try:
@@ -44,6 +46,10 @@ def fetch_recent_otps():
     except Exception as e:
         print(f"OTP Error: {e}")
     return []
+
+@app.route("/")
+def home():
+    return "Bot is running live!"
 
 # --- Keyboards ---
 def main_menu_keyboard():
@@ -168,7 +174,12 @@ def background_relay_worker():
         time.sleep(1)
 
 if __name__ == "__main__":
-    # ব্যাকগ্রাউন্ড ওটিপি রিলে ওয়ার্কার চালু করা হলো
+    # Flask Server Thread
+    def run_flask():
+        app.run(host="0.0.0.0", port=8080)
+    Thread(target=run_flask, daemon=True).start()
+    
+    # Background OTP Relay Thread
     Thread(target=background_relay_worker, daemon=True).start()
     
     print("Bot is starting polling...")
