@@ -232,7 +232,7 @@ def save_range(message):
 
 
 # =========================================================
-# GET API NUMBER
+# GET API NUMBER (Native Copy Buttons)
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
 def get_api_number(message):
@@ -244,8 +244,9 @@ def get_api_number(message):
     )
 
     markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(types.InlineKeyboardButton("❏ +22896234416", callback_data="copy_+22896234416"))
-    markup.add(types.InlineKeyboardButton("❏ +22896161787", callback_data="copy_+22896161787"))
+    # Using Telegram's native copy_text button feature matching your request
+    markup.add(types.InlineKeyboardButton("+22896234416", copy_text=types.CopyTextButton("+22896234416")))
+    markup.add(types.InlineKeyboardButton("+22896161787", copy_text=types.CopyTextButton("+22896161787")))
     markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_number"))
 
     bot.send_message(
@@ -258,11 +259,6 @@ def get_api_number(message):
 # =========================================================
 # NUMBER BUTTONS & CHANGE NUMBER
 # =========================================================
-@bot.callback_query_handler(func=lambda call: call.data.startswith("copy_"))
-def copy_number_callback(call):
-    number = call.data.replace("copy_", "")
-    bot.answer_callback_query(call.id, text=f"Copied: {number}", show_alert=True)
-
 @bot.callback_query_handler(func=lambda call: call.data == "change_number")
 def change_number(call):
     bot.answer_callback_query(call.id, "Number changed.")
