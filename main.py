@@ -1,289 +1,303 @@
 import os
-from threading import Thread
+import asyncio
 import requests
-import telebot
-from telebot import types
-from flask import Flask
+import re
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, CopyTextButton
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-# =========================================================
-# CONFIG & CREDENTIALS
-# =========================================================
-# Your New Bot Token
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAG6ny1a2IXUBBoA73grUKxqfggTi4wS44Y")
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
 VOLTX_API_KEY = "MNFO9XZGN7E"
+BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
+YOUR_TELEGRAM_USERNAME = "smmsaport"
 
-# Voltx Correct Base API Path
-BASE_API_URL = "https://voltxsms.com/api"
-HEADERS = {
-    "X-API-Key": VOLTX_API_KEY,
-    "Authorization": f"Bearer {VOLTX_API_KEY}",
-    "Accept": "application/json"
-}
+USER_STATES = {}
+USER_RANGES = {}
 
-app = Flask(__name__)
-bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
+def get_country_info(phone_number):
+    clean_num = str(phone_number).replace("+", "").strip()
+    if clean_num.startswith("237"): return "Cameroon", "CM", "🇨🇲"
+    elif clean_num.startswith("225"): return "Ivory Coast", "CI", "🇨🇮"
+    elif clean_num.startswith("228"): return "Togo", "TG", "🇨🇮"
+    elif clean_num.startswith("229"): return "Benin", "BJ", "🇧🇯"
+    elif clean_num.startswith("255"): return "Tanzania", "TZ", "🇹🇿"
+    elif clean_num.startswith("266"): return "Lesotho", "LS", "🇱🇸"
+    elif clean_num.startswith("380"): return "Ukraine", "UA", "🇺🇦"
+    elif clean_num.startswith("224"): return "Guinea", "GN", "🇬🇳"
+    elif clean_num.startswith("996"): return "Kyrgyzstan", "KG", "🇰🇬"
+    elif clean_num.startswith("43"): return "Austria", "AT", "🇦🇹"
+    else: return "Togo", "TG", "🇹🇬"
 
-# =========================================================
-# USER DATA & API HELPERS
-# =========================================================
-users = {}
+def _sync_get_voltx_real_number(target_range):
+    headers = {
+        "mauthapi": VOLTX_API_KEY,
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    clean_rid = str(target_range).upper().replace("XXX", "").replace("X", "").strip()
+    payload = {"rid": clean_rid}
+    try:
+        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=3)
+        if res.status_code == 200:
+            res_data = res.json()
+            data = res_data.get("data", {})
+            phone = data.get("full_number") or data.get("national_number") or data.get("phone") or data.get("number")
+            order_id = res_data.get("id") or data.get("id") or res_data.get("rid") or clean_rid
+            if phone:
+                return str(phone), str(order_id)
+    except Exception as e:
+        print(f"API Error: {e}")
+    return None, None
 
-def get_user(user_id):
-    if user_id not in users:
-        users[user_id] = {
-            "balance": 0.091,
-            "binance_id": "Not Set",
-            "range": "22897"
-        }
-    return users[user_id]
+async def get_voltx_real_number(target_range="22896"):
+    return await asyncio.to_thread(_sync_get_voltx_real_number, target_range)
 
-def fetch_panel_numbers(range_val):
-    urls = [
-        f"{BASE_API_URL}/get-number?range={range_val}",
-        f"https://voltxsms.com/m2/api/get-number?range={range_val}",
-        f"https://voltxsms.com/api/v1/numbers?range={range_val}"
-    ]
-    for url in urls:
-        try:
-            response = requests.get(url, headers=HEADERS, timeout=4)
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    return data
-                if isinstance(data, dict):
-                    return data.get("numbers", data.get("data", data.get("result", [])))
-        except Exception as e:
-            print(f"API Fetch Error ({url}): {e}")
-    return []
+def _sync_fetch_live_traffic():
+    headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
+    range_counts = {}
+    total_hits = 0
+    try:
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
+        if res.status_code == 200:
+            res_json = res.json()
+            hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
+            if isinstance(hits, list):
+                total_hits = len(hits)
+                for hit in hits:
+                    if not isinstance(hit, dict): continue
+                    r = hit.get("range") or hit.get("rid")
+                    sid = hit.get("sid", "FACEBOOK")
+                    if r:
+                        clean_r = str(r).strip()
+                        if clean_r in range_counts:
+                            range_counts[clean_r]["count"] += 1
+                        else:
+                            range_counts[clean_r] = {"sid": str(sid).upper(), "count": 1}
+    except Exception as e:
+        print(f"Traffic Error: {e}")
+    sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1]["count"], reverse=True)
+    return sorted_ranges, total_hits
 
-def fetch_panel_traffic():
-    urls = [
-        f"{BASE_API_URL}/traffic-stats",
-        f"https://voltxsms.com/m2/api/traffic-stats",
-        f"https://voltxsms.com/api/stats"
-    ]
-    for url in urls:
-        try:
-            response = requests.get(url, headers=HEADERS, timeout=4)
-            if response.status_code == 200:
-                return response.json()
-        except Exception as e:
-            print(f"Traffic Error ({url}): {e}")
+async def fetch_live_traffic_from_panel():
+    return await asyncio.to_thread(_sync_fetch_live_traffic)
+
+def _sync_check_voltx_otp(target_phone, order_id):
+    headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
+    clean_target = ''.join(filter(str.isdigit, str(target_phone)))
+    short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
+    
+    # 1. Debugging er jonno console response print korbe
+    try:
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
+        if res.status_code == 200:
+            res_json = res.json()
+            # Pura response terminal-e dekhaben jodi code na ase
+            hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
+            if isinstance(hits, list):
+                for hit in hits:
+                    if not isinstance(hit, dict): continue
+                    # Sob possible keys check korbe
+                    num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
+                    msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", ""))
+                    
+                    clean_num = ''.join(filter(str.isdigit, num_raw))
+                    
+                    if short_target in clean_num or short_target in msg or (clean_target and clean_target in clean_num):
+                        match = re.search(r'\b\d{4,8}\b', msg)
+                        if match:
+                            return match.group(0)
+                        elif msg:
+                            return msg
+    except Exception as e:
+        print(f"Console Check Error: {e}")
+
+    # 2. Success-otp endpoint check
+    try:
+        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
+        if res.status_code == 200:
+            res_json = res.json()
+            otps = res_json.get("data", {}).get("otps", []) or res_json.get("data", []) or res_json.get("otps", [])
+            if isinstance(otps, list):
+                for item in otps:
+                    if not isinstance(item, dict): continue
+                    num_raw = str(item.get("number", "") or item.get("phone", "") or item.get("full_number", "") or item.get("receiver", ""))
+                    oid = str(item.get("otp_id", "") or item.get("id", "") or item.get("order_id", ""))
+                    msg = str(item.get("message", "") or item.get("sms", "") or item.get("text", "") or item.get("content", "") or item.get("otp", ""))
+                    
+                    clean_num = ''.join(filter(str.isdigit, num_raw))
+                    
+                    if short_target in clean_num or short_target in msg or (order_id and str(order_id) in oid):
+                        match = re.search(r'\b\d{4,8}\b', msg)
+                        if match:
+                            return match.group(0)
+                        elif msg:
+                            return msg
+    except Exception as e:
+        print(f"Success-OTP Error: {e}")
+        
     return None
 
-# =========================================================
-# MAIN MENU
-# =========================================================
-def main_menu():
-    markup = types.ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        row_width=2
-    )
-    markup.add(
-        types.KeyboardButton("📞 Get API Number"),
-        types.KeyboardButton("⚙️ Set Range")
-    )
-    markup.add(
-        types.KeyboardButton("🟢 Live Traffic"),
-        types.KeyboardButton("💳 Balance")
-    )
-    return markup
+async def check_voltx_otp(target_phone, order_id):
+    return await asyncio.to_thread(_sync_check_voltx_otp, target_phone, order_id)
 
-
-# =========================================================
-# START
-# =========================================================
-@bot.message_handler(commands=["start"])
-def start(message):
-    text = (
-        "👋 <b>Welcome to FB MASTER NUMBER</b>\n\n"
-        "<i>Please choose an option from the menu below:</i>"
-    )
-    bot.send_message(
-        message.chat.id,
-        text,
-        reply_markup=main_menu()
-    )
-
-
-# =========================================================
-# BALANCE
-# =========================================================
-@bot.message_handler(func=lambda m: m.text == "💳 Balance")
-def balance(message):
-    user = get_user(message.from_user.id)
-
-    text = (
-        f"💰 <b>Current Balance:</b> ${user['balance']:.3f}\n"
-        f"🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\n"
-        "Minimum withdraw is <b>$0.2</b>"
-    )
-
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(
-        types.InlineKeyboardButton(
-            "💳 Withdraw via Binance",
-            callback_data="withdraw"
-        )
-    )
-    markup.add(
-        types.InlineKeyboardButton(
-            "🔴 Set Binance ID",
-            callback_data="set_binance"
-        )
-    )
-
-    bot.send_message(
-        message.chat.id,
-        text,
-        reply_markup=markup
-    )
-
-# =========================================================
-# SET BINANCE ID & WITHDRAW
-# =========================================================
-@bot.callback_query_handler(func=lambda call: call.data == "set_binance")
-def set_binance(call):
-    bot.answer_callback_query(call.id)
-    msg = bot.send_message(
-        call.message.chat.id,
-        "🆔 <b>Send your Binance Pay ID:</b>"
-    )
-    bot.register_next_step_handler(msg, save_binance_id)
-
-def save_binance_id(message):
-    user = get_user(message.from_user.id)
-    user["binance_id"] = message.text.strip()
-    bot.send_message(
-        message.chat.id,
-        "✅ <b>Binance Pay ID saved successfully.</b>",
-        reply_markup=main_menu()
-    )
-
-@bot.callback_query_handler(func=lambda call: call.data == "withdraw")
-def withdraw(call):
-    user = get_user(call.from_user.id)
-    if user["balance"] < 0.2:
-        bot.answer_callback_query(call.id, "❌ Minimum withdraw is $0.2", show_alert=True)
-        return
-    if user["binance_id"] == "Not Set":
-        bot.answer_callback_query(call.id, "❌ Please set Binance Pay ID first.", show_alert=True)
-        return
-    bot.answer_callback_query(call.id, "✅ Withdrawal request received.", show_alert=True)
-
-
-# =========================================================
-# SET RANGE
-# =========================================================
-@bot.message_handler(func=lambda m: m.text == "⚙️ Set Range")
-def set_range(message):
-    msg = bot.send_message(
-        message.chat.id,
-        "⚙️ <b>Send your range:</b>\n\n"
-        "Example:\n"
-        "<code>22897</code>"
-    )
-    bot.register_next_step_handler(msg, save_range)
-
-def save_range(message):
-    user = get_user(message.from_user.id)
-    user["range"] = message.text.strip()
-    bot.send_message(
-        message.chat.id,
-        f"✅ Range set to: <code>{user['range']}</code>",
-        reply_markup=main_menu()
-    )
-
-
-# =========================================================
-# GET API NUMBER
-# =========================================================
-@bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
-def get_api_number(message):
-    user = get_user(message.from_user.id)
-    range_val = user['range']
+def create_number_markup(numbers_list):
+    keyboard = []
+    for num in numbers_list:
+        _, _, flag = get_country_info(num)
+        keyboard.append([InlineKeyboardButton(text=f"{flag} {num}", copy_text=CopyTextButton(text=num))])
     
-    raw_numbers = fetch_panel_numbers(range_val)
-    numbers = []
-    if raw_numbers:
-        for item in raw_numbers:
-            if isinstance(item, dict):
-                num = item.get("number") or item.get("phone") or item.get("full_number")
-            else:
-                num = str(item)
-            if num:
-                if not num.startswith("+"):
-                    num = "+" + num
-                numbers.append(num)
-                
-    if not numbers:
-        numbers = [f"+{range_val}920374", f"+{range_val}265497"]
+    keyboard.append([
+        InlineKeyboardButton("🔔 OTP GROUP", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}"),
+        InlineKeyboardButton("🔄 Change", callback_data="change_number")
+    ])
+    keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="back_home")])
+    return InlineKeyboardMarkup(keyboard)
 
-    text = (
-        f"🌐 <b>Country :</b> Togo 🇹🇬\n"
-        f"⚙️ <b>Range   :</b> {range_val}"
-    )
+async def poll_for_otp(chat_id, order_id, phone, context):
+    for _ in range(300): 
+        await asyncio.sleep(1) 
+        try:
+            status = await check_voltx_otp(phone, order_id)
+            if status:
+                otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{phone}</code>\n🔑 <b>OTP Code:</b> <code>{status}</code>"
+                await context.bot.send_message(
+                    chat_id=chat_id, 
+                    text=otp_message, 
+                    parse_mode="HTML"
+                )
+                return
+        except Exception as e:
+            print(f"Polling Send Error: {e}")
 
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    for num in numbers[:4]:
-        markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num)))
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    reply_keyboard = [
+        ["📞 Get API Number", "⚙️ Set Range"],
+        ["🟢 Live Traffic", "💳 Balance"],
+        ["📣 OTP Group"]
+    ]
+    markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
+    await update.message.reply_text("Welcome to FB MASTER NUMBER bot! 🤖\nPlease select an option from the menu below:", reply_markup=markup)
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text
+
+    if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
+        USER_STATES[user_id] = None
+
+    if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
+        clean_text = text.strip()
+        if "x" in clean_text.lower() or clean_text.isdigit():
+            USER_STATES[user_id] = None
+            USER_RANGES[user_id] = clean_text
+            await update.message.reply_text(f"🔴 Target range updated to: <b>{clean_text}</b>", parse_mode="HTML")
+        else:
+            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
+        return
+
+    if text == "📞 Get API Number":
+        user_range = USER_RANGES.get(user_id, "22896")
+        numbers = []
+        orders = []
+
+        for _ in range(2):
+            p, oid = await get_voltx_real_number(target_range=user_range)
+            if p and p not in numbers:
+                numbers.append(p)
+                if oid: orders.append((p, oid))
+
+        if not numbers:
+            await update.message.reply_text(f"❌ <b>No Real Number Available!</b>\n\nPanel has no stock for range <code>{user_range}</code>.", parse_mode="HTML")
+            return
+
+        country_name, _, flag = get_country_info(numbers[0])
+        header_text = f"✅ <b>Number:</b> {flag} {country_name}"
         
-    markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_number"))
+        reply_markup = create_number_markup(numbers)
+        await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
+        
+        for p, oid in orders:
+            asyncio.create_task(poll_for_otp(update.effective_chat.id, oid, p, context))
 
-    bot.send_message(
-        message.chat.id,
-        text,
-        reply_markup=markup
-    )
+    elif text == "⚙️ Set Range":
+        USER_STATES[user_id] = "WAITING_FOR_RANGE"
+        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
 
+    elif text == "🟢 Live Traffic":
+        sorted_ranges, total_hits = await fetch_live_traffic_from_panel()
+        traffic_lines = ["📊 <b>Live Traffic</b>\n", f"📋 <b>Total OTP:</b> {total_hits}", f"⏱ <b>Record:</b> Last 15 Minutes\n"]
+        if sorted_ranges:
+            top_r, top_info = sorted_ranges[0]
+            _, _, top_flag = get_country_info(top_r)
+            traffic_lines.append(f"👑 <b>Top Range:</b> {top_flag} <code>{top_r}</code> - {top_info['sid']}")
+            traffic_lines.append("\n📥 <b>Range List</b>")
+            for r, info in sorted_ranges:
+                _, _, flag = get_country_info(r)
+                traffic_lines.append(f"• {flag} <code>{r}</code> - {info['sid']} - {info['count']}")
+        else:
+            traffic_lines.append("⚠️ No active ranges found right now.")
+        await update.message.reply_text("\n".join(traffic_lines), parse_mode="HTML")
 
-@bot.callback_query_handler(func=lambda call: call.data == "change_number")
-def change_number(call):
-    bot.answer_callback_query(call.id, "Number refreshed.")
-    get_api_number(call.message)
+    elif text == "💳 Balance":
+        balance_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw_binance")],
+            [InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
+            [InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
+        ])
+        await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
 
+    elif text == "📣 OTP Group":
+        await update.message.reply_text(f"📣 Join our OTP Group: t.me/{YOUR_TELEGRAM_USERNAME}")
 
-# =========================================================
-# LIVE TRAFFIC
-# =========================================================
-@bot.message_handler(func=lambda m: m.text == "🟢 Live Traffic")
-def live_traffic(message):
-    stats = fetch_panel_traffic()
-    if stats and isinstance(stats, dict):
-        active = stats.get("active", stats.get("total_active", 1))
-        requests_count = stats.get("requests", stats.get("total_requests", 260))
-        successful = stats.get("successful", stats.get("success", 180))
-        failed = stats.get("failed", 80)
-    else:
-        active, requests_count, successful, failed = 1, 260, 180, 80
+async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-    text = (
-        "🟢 <b>Live Traffic (Panel)</b>\n\n"
-        f"📊 Active: {active}\n"
-        f"📞 Requests: {requests_count}\n"
-        f"✅ Successful: {successful}\n"
-        f"❌ Failed: {failed}"
-    )
-    bot.send_message(
-        message.chat.id,
-        text
-    )
+    if query.data == "change_number":
+        user_id = query.from_user.id
+        user_range = USER_RANGES.get(user_id, "22896")
+        numbers = []
+        orders = []
 
+        for _ in range(2):
+            p, oid = await get_voltx_real_number(target_range=user_range)
+            if p and p not in numbers:
+                numbers.append(p)
+                if oid: orders.append((p, oid))
 
-# =========================================================
-# FLASK & RUN
-# =========================================================
-@app.route("/")
-def home():
-    return "VoltX Panel Bot is running live without OTP groups!"
+        if not numbers: return
 
+        country_name, _, flag = get_country_info(numbers[0])
+        header_text = f"✅ <b>Number:</b> {flag} {country_name}"
+        reply_markup = create_number_markup(numbers)
+        try:
+            await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
+        except Exception: pass
 
-if __name__ == "__main__":
-    def run_flask():
-        app.run(host="0.0.0.0", port=8080)
+        for p, oid in orders:
+            asyncio.create_task(poll_for_otp(query.message.chat_id, oid, p, context))
 
-    Thread(target=run_flask, daemon=True).start()
-    
-    print("🤖 Bot is running...")
-    bot.remove_webhook()
-    bot.infinity_polling(skip_pending=True, interval=1, timeout=20)
+    elif query.data == "back_home":
+        try: await query.message.delete()
+        except Exception: pass
+        await start(update, context)
+    elif query.data == "set_binance":
+        await query.message.reply_text("Please send your Binance Pay ID:")
+
+if __name__ == '__main__':
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler('start', start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+    app.add_handler(CallbackQueryHandler(handle_callback))
+
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import threading
+
+    class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
+        do_GET = lambda self, *a: (self.send_response(200), self.end_headers(), self.wfile.write(b"Bot is running!"))
+
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), SimpleHTTPRequestHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+
+    app.run_polling()
