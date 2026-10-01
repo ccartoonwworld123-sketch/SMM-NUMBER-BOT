@@ -2,7 +2,7 @@ import time
 import requests
 import telebot
 from telebot import types
-from flask import Flask, render_template_string
+from flask import Flask
 from threading import Thread
 
 # --- Configuration & Credentials ---
@@ -20,10 +20,9 @@ HEADERS = {
 }
 
 # Initialize Telegram Bot & Flask App
-bot = telebot.TeleBot(BOT_TOKEN)
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
 app = Flask(__name__)
 
-# --- API Functions ---
 def get_balance():
     try:
         response = requests.get(f"{BASE_API_URL}/balance", headers=HEADERS, timeout=10)
@@ -47,20 +46,20 @@ def fetch_recent_otps():
         print(f"OTP Error: {e}")
     return []
 
-# --- Flask Web Server ---
 @app.route("/")
 def home():
-    return "FB Master Number Bot Panel is active and running!"
+    return "Bot is running live!"
 
-# --- Telegram Keyboards (Exact Match with SS) ---
+# --- Keyboards ---
 def main_menu_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    btn_number = types.KeyboardButton("Get API Number")
-    btn_range = types.KeyboardButton("Set Range")
-    btn_traffic = types.KeyboardButton("Live Traffic")
-    btn_balance = types.KeyboardButton("Balance")
-    btn_group = types.KeyboardButton("OTP Group")
-    markup.add(btn_number, btn_range, btn_traffic, btn_balance, btn_group)
+    markup.add(
+        types.KeyboardButton("Get API Number"),
+        types.KeyboardButton("Set Range"),
+        types.KeyboardButton("Live Traffic"),
+        types.KeyboardButton("Balance"),
+        types.KeyboardButton("OTP Group")
+    )
     return markup
 
 @bot.message_handler(commands=['start', 'help'])
@@ -71,7 +70,7 @@ def send_welcome(message):
         "Everything you need in one place. ⚡\n\n"
         "Use the buttons below to control your panel:"
     )
-    bot.send_message(message.chat.id, welcome_text, reply_markup=main_menu_keyboard(), parse_mode="Markdown")
+    bot.send_message(message.chat.id, welcome_text, reply_markup=main_menu_keyboard())
 
 @bot.message_handler(func=lambda message: True)
 def handle_menu_clicks(message):
@@ -79,16 +78,12 @@ def handle_menu_clicks(message):
     chat_id = message.chat.id
 
     if text == "Get API Number":
-        # Inline buttons like screenshot 2
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📋 +22896234416", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("📋 +22896161787", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_num"))
         
-        number_info = (
-            "🌐 Country : Togo\n"
-            "⚙️ Range : 22896"
-        )
+        number_info = "🌐 Country : Togo\n⚙️ Range : 22896"
         bot.send_message(chat_id, number_info, reply_markup=markup)
 
     elif text == "Set Range":
@@ -107,10 +102,9 @@ def handle_menu_clicks(message):
         )
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("🔄 Refresh", callback_data="refresh_traffic"))
-        bot.send_message(chat_id, traffic_text, reply_markup=markup, parse_mode="Markdown")
+        bot.send_message(chat_id, traffic_text, reply_markup=markup)
 
     elif text == "Balance":
-        bal_data = get_balance()
         balance_text = (
             "💳 **Your Balance Account**\n\n"
             "Current Balance: `$0.091`\n"
@@ -121,7 +115,7 @@ def handle_menu_clicks(message):
         markup.add(types.InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw"))
         markup.add(types.InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance"))
         markup.add(types.InlineKeyboardButton("📢 OTP Group", url=OTP_GROUP_LINK))
-        bot.send_message(chat_id, balance_text, reply_markup=markup, parse_mode="Markdown")
+        bot.send_message(chat_id, balance_text, reply_markup=markup)
 
     elif text == "OTP Group":
         group_text = (
@@ -130,14 +124,15 @@ def handle_menu_clicks(message):
         )
         markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("📢 Join OTP Group", url=OTP_GROUP_LINK))
-        bot.send_message(chat_id, group_text, reply_markup=markup, parse_mode="Markdown")
+        bot.send_message(chat_id, group_text, reply_markup=markup)
 
     else:
         bot.send_message(chat_id, "Please use the menu buttons below.", reply_markup=main_menu_keyboard())
 
-# --- Background Worker for Instant OTP Relay to Group (1s interval) ---
+# --- Background Worker for Instant OTP Relay (1s interval) ---
 def background_relay_worker():
     sent_ids = set()
+    time.sleep(5) # সার্ভার পুরোপুরি স্টার্ট হওয়ার জন্য ৫ সেকেন্ড অপেক্ষা করবে
     while True:
         try:
             otps = fetch_recent_otps()
@@ -157,7 +152,6 @@ def background_relay_worker():
                         range_val = otp.get("range", "23762XXX")
                         lang = otp.get("language", "English")
 
-                        # Exact format from your group screenshot
                         formatted_msg = (
                             f"🟢 **OTP**                 `Admin`\n"
                             f"👤 **{service} OTP RECEIVE**\n"
@@ -166,27 +160,28 @@ def background_relay_worker():
                             f"🎯 **Range**   : {range_val}\n"
                             f"🗣️ **Language** : {lang}\n"
                             f"━━━━━━━━━━━━━━━━━━━\n"
-                            f"✉️️ **Message** :\n"
+                            f"✉ **Message** :\n"
                             f"{message_text}"
                         )
                         
                         markup = types.InlineKeyboardMarkup()
                         markup.add(types.InlineKeyboardButton("NUMBER BOT", url=f"https://t.me/{bot.get_me().username}"))
                         
-                        bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, reply_markup=markup, parse_mode="Markdown")
-                        print("Instant OTP forwarded to group successfully!")
+                        bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, reply_markup=markup)
         except Exception as e:
             print(f"Worker Error: {e}")
         
         time.sleep(1)
 
-# --- Main Execution ---
 if __name__ == "__main__":
-    print("Starting exact match bot and relay system...")
+    # Flask সার্ভার ব্যাকগ্রাউন্ডে রান হবে
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
     
+    # ওটিপি রিলে ওয়ার্কার চালু হবে
     Thread(target=background_relay_worker, daemon=True).start()
     
-    bot.infinity_polling()
+    # বট পোলিং শুরু হবে
+    print("Bot is starting polling...")
+    bot.infinity_polling(skip_pending=True)
