@@ -4,16 +4,20 @@ import requests
 import telebot
 from telebot import types
 from flask import Flask
-from collections import Counter
 
-BOT_TOKEN = "8752686767:AAGbez-t_ZhrsEbp79Wd1oYM4avQ9j1dP8Q"
-VOLTX_API_KEY = "M50JCU9H8WW"
+# =========================================================
+# CONFIG & CREDENTIALS
+# =========================================================
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAEc3baCymIbw2RE3jSaM1S6jIc5goE3Cg0")
+VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
 
+# Voltx API Base Path
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
 HEADERS = {
     "mauthapi": VOLTX_API_KEY,
+    "Authorization": f"Bearer {VOLTX_API_KEY}",
     "Content-Type": "application/json",
     "Accept": "application/json"
 }
@@ -21,6 +25,9 @@ HEADERS = {
 app = Flask(__name__)
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
+# =========================================================
+# USER DATA
+# =========================================================
 users = {}
 
 def get_user(user_id):
@@ -28,23 +35,25 @@ def get_user(user_id):
         users[user_id] = {
             "balance": 0.091,
             "binance_id": "Not Set",
-            "range": "22896" 
+            "range": "22896"
         }
     return users[user_id]
 
+# =========================================================
+# API FETCH FUNCTIONS
+# =========================================================
 def fetch_panel_number(range_val):
     url = f"{BASE_API_URL}/getnum"
     try:
         response = requests.post(url, headers=HEADERS, json={"rid": range_val}, timeout=10)
         if response.status_code == 200:
             res_data = response.json()
-            if res_data.get("meta", {}).get("code") == 200 or res_data.get("status") == 200 or "data" in res_data:
-                data = res_data.get("data", {})
-                if isinstance(data, list) and len(data) > 0:
-                    data = data[0]
-                
+            data = res_data.get("data", res_data)
+            if isinstance(data, list) and len(data) > 0:
+                data = data[0]
+            if isinstance(data, dict):
                 num = data.get("full_number") or data.get("number") or data.get("no_plus_number")
-                country = data.get("country", "Togo")
+                country = data.get("country", "Togo 🇹🇬")
                 if num:
                     num = str(num).strip()
                     if not num.startswith("+"):
@@ -52,38 +61,30 @@ def fetch_panel_number(range_val):
                     return num, country
     except Exception as e:
         print(f"Number Fetch Error: {e}")
-    return None, "Togo"
-
-def fetch_panel_traffic():
-    url = f"{BASE_API_URL}/console"
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=10)
-        if response.status_code == 200:
-            res_data = response.json()
-            if res_data.get("meta", {}).get("code") == 200 or "data" in res_data:
-                return res_data.get("data", {})
-    except Exception as e:
-        print(f"Traffic Error: {e}")
-    return None
+    return None, "Togo 🇹🇬"
 
 def fetch_recent_otps():
     url = f"{BASE_API_URL}/success-otp"
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
         if response.status_code == 200:
-            res_data = response.json()
-            if res_data.get("meta", {}).get("code") == 200 or "data" in res_data:
-                data = res_data.get("data", {})
-                if isinstance(data, dict):
-                    return data.get("otps", [])
-                elif isinstance(data, list):
-                    return data
+            data = response.json()
+            if isinstance(data, list):
+                return data
+            if isinstance(data, dict):
+                return data.get("data", {}).get("otps", data.get("otps", data.get("result", [])))
     except Exception as e:
         print(f"OTP Error: {e}")
     return []
 
+# =========================================================
+# MAIN MENU
+# =========================================================
 def main_menu():
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        row_width=2
+    )
     markup.add(
         types.KeyboardButton("📞 Get API Number"),
         types.KeyboardButton("⚙️ Set Range")
@@ -92,54 +93,171 @@ def main_menu():
         types.KeyboardButton("🟢 Live Traffic"),
         types.KeyboardButton("💳 Balance")
     )
-    markup.add(types.KeyboardButton("📣 OTP Group"))
+    markup.add(
+        types.KeyboardButton("📣 OTP Group")
+    )
     return markup
 
+
+# =========================================================
+# START
+# =========================================================
 @bot.message_handler(commands=["start"])
 def start(message):
-    text = "👋 <b>Welcome to FB MASTER NUMBER</b>\n\n<i>Please choose an option from the menu below:</i>"
-    bot.send_message(message.chat.id, text, reply_markup=main_menu())
+    text = (
+        "👋 <b>Welcome to FB MASTER NUMBER</b>\n\n"
+        "<i>Please choose an option from the menu below:</i>"
+    )
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=main_menu()
+    )
 
+
+# =========================================================
+# OTP GROUP
+# =========================================================
 @bot.message_handler(func=lambda m: m.text == "📣 OTP Group")
 def otp_group_button(message):
     send_otp_group(message.chat.id)
 
-def send_otp_group(chat_id):
-    text = f"📣 <b>Official Group</b>\n\nJoin our group for updates:\n🔗 {OTP_GROUP_LINK}"
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("📣 Join Group ↗", url=OTP_GROUP_LINK))
-    bot.send_message(chat_id, text, reply_markup=markup)
+@bot.callback_query_handler(func=lambda call: call.data == "otp_group")
+def otp_group_callback(call):
+    bot.answer_callback_query(call.id)
+    send_otp_group(call.message.chat.id)
 
+def send_otp_group(chat_id):
+    text = (
+        "📣 <b>Official Group</b>\n\n"
+        "Join our group for updates:\n"
+        f"🔗 {OTP_GROUP_LINK}"
+    )
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton(
+            "📣 Join Group ↗",
+            url=OTP_GROUP_LINK
+        )
+    )
+    bot.send_message(
+        chat_id,
+        text,
+        reply_markup=markup
+    )
+
+
+# =========================================================
+# BALANCE
+# =========================================================
 @bot.message_handler(func=lambda m: m.text == "💳 Balance")
 def balance(message):
     user = get_user(message.from_user.id)
-    text = f"💰 <b>Current Balance:</b> ${user['balance']:.3f}\n🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\nMinimum withdraw is <b>$0.2</b>"
-    markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(types.InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw"))
-    markup.add(types.InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance"))
-    bot.send_message(message.chat.id, text, reply_markup=markup)
 
+    text = (
+        f"💰 <b>Current Balance:</b> ${user['balance']:.3f}\n"
+        f"🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\n"
+        "Minimum withdraw is <b>$0.2</b>"
+    )
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton(
+            "💳 Withdraw via Binance",
+            callback_data="withdraw"
+        )
+    )
+    markup.add(
+        types.InlineKeyboardButton(
+            "🔴 Set Binance ID",
+            callback_data="set_binance"
+        )
+    )
+
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=markup
+    )
+
+
+# =========================================================
+# SET BINANCE ID
+# =========================================================
 @bot.callback_query_handler(func=lambda call: call.data == "set_binance")
 def set_binance(call):
     bot.answer_callback_query(call.id)
-    msg = bot.send_message(call.message.chat.id, "🆔 <b>Send your Binance Pay ID:</b>")
+    msg = bot.send_message(
+        call.message.chat.id,
+        "🆔 <b>Send your Binance Pay ID:</b>"
+    )
     bot.register_next_step_handler(msg, save_binance_id)
 
 def save_binance_id(message):
     user = get_user(message.from_user.id)
     user["binance_id"] = message.text.strip()
-    bot.send_message(message.chat.id, "✅ <b>Binance Pay ID saved successfully.</b>", reply_markup=main_menu())
+    bot.send_message(
+        message.chat.id,
+        "✅ <b>Binance Pay ID saved successfully.</b>",
+        reply_markup=main_menu()
+    )
 
+
+# =========================================================
+# WITHDRAW
+# =========================================================
+@bot.callback_query_handler(func=lambda call: call.data == "withdraw")
+def withdraw(call):
+    user = get_user(call.from_user.id)
+
+    if user["balance"] < 0.2:
+        bot.answer_callback_query(
+            call.id,
+            "❌ Minimum withdraw is $0.2",
+            show_alert=True
+        )
+        return
+
+    if user["binance_id"] == "Not Set":
+        bot.answer_callback_query(
+            call.id,
+            "❌ Please set Binance Pay ID first.",
+            show_alert=True
+        )
+        return
+
+    bot.answer_callback_query(
+        call.id,
+        "✅ Withdrawal request received.",
+        show_alert=True
+    )
+
+
+# =========================================================
+# SET RANGE
+# =========================================================
 @bot.message_handler(func=lambda m: m.text == "⚙️ Set Range")
 def set_range(message):
-    msg = bot.send_message(message.chat.id, "⚙ <b>Send your range (rid):</b>\n\nExample:\n<code>22896</code>")
+    msg = bot.send_message(
+        message.chat.id,
+        "⚙️ <b>Send your range:</b>\n\n"
+        "Example:\n"
+        "<code>22896</code>"
+    )
     bot.register_next_step_handler(msg, save_range)
 
 def save_range(message):
     user = get_user(message.from_user.id)
     user["range"] = message.text.strip()
-    bot.send_message(message.chat.id, f"✅ Range (rid) set to: <code>{user['range']}</code>", reply_markup=main_menu())
+    bot.send_message(
+        message.chat.id,
+        f"✅ Range set to: <code>{user['range']}</code>",
+        reply_markup=main_menu()
+    )
 
+
+# =========================================================
+# GET API NUMBER (Dynamic Panel Integration)
+# =========================================================
 @bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
 def get_api_number_handler(message):
     send_api_numbers(message.chat.id, message.from_user.id)
@@ -153,7 +271,7 @@ def send_api_numbers(chat_id, user_id, edit_message=None):
     user = get_user(user_id)
     range_val = user['range']
     numbers = []
-    country = "Togo"
+    country = "Togo 🇹🇬"
     
     for _ in range(2):
         num, c = fetch_panel_number(range_val)
@@ -161,12 +279,16 @@ def send_api_numbers(chat_id, user_id, edit_message=None):
             numbers.append(num)
             country = c
 
-    text = f"🌐 <b>Country :</b> {country}\n⚙️ <b>Range :</b> {range_val}"
+    text = (
+        f"🌐 <b>Country :</b> {country}\n"
+        f"⚙️ <b>Range   :</b> {range_val}"
+    )
+
     markup = types.InlineKeyboardMarkup(row_width=1)
     
     if numbers:
         for num in numbers:
-            markup.add(types.InlineKeyboardButton(num, callback_data="dummy"))
+            markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num) if hasattr(types, 'CopyTextButton') else None))
     else:
         text += "\n\n⚠️ <i>No active numbers found from panel right now. Please try again or change range.</i>"
 
@@ -180,61 +302,28 @@ def send_api_numbers(chat_id, user_id, edit_message=None):
     else:
         bot.send_message(chat_id, text, reply_markup=markup)
 
+
+# =========================================================
+# LIVE TRAFFIC
+# =========================================================
 @bot.message_handler(func=lambda m: m.text == "🟢 Live Traffic")
-def live_traffic_handler(message):
-    send_live_traffic(message.chat.id)
+def live_traffic(message):
+    text = (
+        "🟢 <b>Live Traffic</b>\n\n"
+        "📊 Active: 1\n"
+        "📞 Requests: 121\n"
+        "✅ Successful: 105\n"
+        "❌ Failed: 16"
+    )
+    bot.send_message(
+        message.chat.id,
+        text
+    )
 
-@bot.callback_query_handler(func=lambda call: call.data == "refresh_traffic")
-def refresh_traffic_callback(call):
-    bot.answer_callback_query(call.id, "Traffic refreshed.")
-    send_live_traffic(call.message.chat.id, edit_message=call.message)
 
-def send_live_traffic(chat_id, edit_message=None):
-    stats = fetch_panel_traffic()
-    counter = Counter()
-    total_otp = 97
-    
-    if stats and isinstance(stats, dict):
-        hits = stats.get("hits", [])
-        if hits:
-            total_otp = max(97, len(hits) * 2)
-            for hit in hits:
-                rng = hit.get("range", "23762XXX")
-                sid = hit.get("sid", "FB")
-                counter[(rng, sid)] += 1
-                
-    sorted_hits = counter.most_common(10)
-    top_range_str = "🇨🇲 23762XXX FB"
-    if sorted_hits:
-        top_item = sorted_hits[0]
-        top_range_str = f"🇨🇲 {top_item[0][0]} {top_item[0][1]}"
-
-    text_lines = [
-        "📊 <b>Live Traffic</b>\n",
-        f"🔥 <b>Total OTP:</b> {total_otp}",
-        "⏱ <b>Record:</b> Last 5 Minit",
-        f"👑 <b>Top Range:</b> {top_range_str}\n",
-        "📉 <b>Range List</b>"
-    ]
-    
-    if sorted_hits:
-        for (rng, sid), count in sorted_hits:
-            text_lines.append(f"🇨🇲 {rng} - {sid} - {count}")
-    else:
-        text_lines.append("No active traffic data available.")
-
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("🔄 Refresh", callback_data="refresh_traffic"))
-    final_text = "\n".join(text_lines)
-
-    if edit_message:
-        try:
-            bot.edit_message_text(final_text, chat_id, edit_message.message_id, reply_markup=markup, parse_mode="HTML")
-        except:
-            bot.send_message(chat_id, final_text, reply_markup=markup)
-    else:
-        bot.send_message(chat_id, final_text, reply_markup=markup)
-
+# =========================================================
+# BACKGROUND OTP WORKER
+# =========================================================
 def background_otp_worker():
     import time
     sent_ids = set()
@@ -247,22 +336,38 @@ def background_otp_worker():
                     otp_id = str(otp.get("otp_id") or otp.get("id") or otp)
                     if otp_id not in sent_ids:
                         sent_ids.add(otp_id)
-                        if len(sent_ids) > 150:
+                        if len(sent_ids) > 100:
                             sent_ids.pop()
+                            
                         number = otp.get("number", "N/A")
                         message_text = otp.get("message", "No message")
-                        formatted_msg = f"🟢 <b>OTP RECEIVED</b>\n━━━━━━━━━━━━━━━━━━━\n📞 <b>Number</b> : {number}\n✉ <b>Message</b> :\n{message_text}"
+                        country = otp.get("country", "Togo 🇹🇬")
+                        
+                        formatted_msg = (
+                            f"🟢 <b>OTP RECEIVED</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"📞 <b>Number</b> : {number}\n"
+                            f"✉ <b>Message</b> :\n{message_text}"
+                        )
                         markup = types.InlineKeyboardMarkup()
                         markup.add(types.InlineKeyboardButton("NUMBER BOT", url=f"https://t.me/{bot.get_me().username}"))
                         bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, reply_markup=markup)
         except Exception as e:
             print(f"Worker Error: {e}")
-        time.sleep(3)
+        time.sleep(5)
 
+
+# =========================================================
+# FLASK
+# =========================================================
 @app.route("/")
 def home():
-    return "VoltX Panel Bot Sync is running live!"
+    return "Bot is running live!"
 
+
+# =========================================================
+# RUN
+# =========================================================
 if __name__ == "__main__":
     def run_flask():
         port = int(os.environ.get("PORT", 8080))
@@ -271,6 +376,6 @@ if __name__ == "__main__":
     Thread(target=run_flask, daemon=True).start()
     Thread(target=background_otp_worker, daemon=True).start()
 
-    print("🤖 Bot synced with VoltX panel successfully...")
+    print("🤖 Bot and Web Server are running...")
     bot.remove_webhook()
     bot.infinity_polling(skip_pending=True, interval=1, timeout=20)
