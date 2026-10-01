@@ -24,15 +24,6 @@ HEADERS = {
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
 app = Flask(__name__)
 
-def get_balance():
-    try:
-        response = requests.get(f"{BASE_API_URL}/balance", headers=HEADERS, timeout=10)
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        print(f"Balance Error: {e}")
-    return None
-
 def fetch_recent_otps():
     url = f"{BASE_API_URL}/success-otp"
     try:
@@ -80,8 +71,9 @@ def handle_menu_clicks(message):
 
     if text == "Get API Number":
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton(" +22896280920", callback_data="copy_num"))
-        markup.add(types.InlineKeyboardButton(" +22896980378", callback_data="copy_num"))
+        # একদম সিম্পল নাম্বার ফরম্যাট (কোনো বাড়তি আইকন ছাড়া)
+        markup.add(types.InlineKeyboardButton("+22896280920", callback_data="copy_num"))
+        markup.add(types.InlineKeyboardButton("+22896980378", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_num"))
         
         number_info = "🌐 Country : Togo\n⚙️ Range : 22896"
@@ -130,10 +122,10 @@ def handle_menu_clicks(message):
     else:
         bot.send_message(chat_id, "Please use the menu buttons below.", reply_markup=main_menu_keyboard())
 
-# --- Safe Background Worker (Prevents Conflict) ---
+# --- Safe Background Worker ---
 def background_relay_worker():
     sent_ids = set()
-    time.sleep(10) # Start thanda hoyar por start hobe
+    time.sleep(10)
     while True:
         try:
             otps = fetch_recent_otps()
@@ -171,7 +163,7 @@ def background_relay_worker():
         except Exception as e:
             print(f"Worker Error: {e}")
         
-        time.sleep(5) # 5 second interval rakha holo jate API ba Telegram block na kore
+        time.sleep(5)
 
 if __name__ == "__main__":
     def run_flask():
