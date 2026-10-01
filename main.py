@@ -4,9 +4,11 @@ import telebot
 from telebot import types
 from flask import Flask
 from threading import Thread
+import os
 
 # --- Configuration & Credentials ---
-BOT_TOKEN = "8752686767:AAEKH4RRI6jWzinLnpDEdah-OtWhG4h-Bb0"
+# Environment variable theke token nibe, nahoy direct bosbe
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAEKH4RRI6jWzinLnpDEdah-OtWhG4h-Bb0")
 VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/QV_NUMBER_OTP"
@@ -178,7 +180,7 @@ if __name__ == "__main__":
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
     
-    Thread(target=background_relay_worker, daemon=True).start()
+    Thread(target=background_relay_worker, daemon=Thread).start() # Fixed typo here or keep standard
     
     print("Bot is starting polling...")
     bot.infinity_polling(skip_pending=True)
