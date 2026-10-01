@@ -6,7 +6,7 @@ from flask import Flask
 from threading import Thread
 
 # --- Configuration & Credentials ---
-BOT_TOKEN = "8752686767:AAGiwPVrhS2ghoEgCdmook8cJxLRuPo_UA0"
+BOT_TOKEN = "8752686767:AAEKH4RRI6jWzinLnpDEdah-OtWhG4h-Bb0"
 VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/QV_NUMBER_OTP"
