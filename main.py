@@ -8,7 +8,7 @@ from flask import Flask
 # =========================================================
 # CONFIG & CREDENTIALS
 # =========================================================
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAEKH4RRI6jWzinLnpDEdah-OtWhG4h-Bb0")
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAEc3baCymIbw2RE3jSaM1S6jIc5goE3Cg0")
 VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
@@ -241,7 +241,7 @@ def withdraw(call):
 # =========================================================
 # SET RANGE
 # =========================================================
-@bot.message_handler(func=lambda m: m.text == "⚙️️ Set Range")
+@bot.message_handler(func=lambda m: m.text == "⚙️ Set Range")
 def set_range(message):
     msg = bot.send_message(
         message.chat.id,
