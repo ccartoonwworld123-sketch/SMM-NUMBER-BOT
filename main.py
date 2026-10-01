@@ -71,8 +71,6 @@ def handle_menu_clicks(message):
 
     if text == "Get API Number":
         markup = types.InlineKeyboardMarkup()
-        # Apnar chawa copy chinho (copy) shohor button gulo
-        markup = types.InlineKeyboardMarkup()
         markup.add(types.InlineKeyboardButton("+22896234416", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("+22896161787", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_num"))
@@ -87,7 +85,7 @@ def handle_menu_clicks(message):
         traffic_text = (
             "📊 **Live Trafic**\n\n"
             "🔥 **Total OTP:** 121\n"
-            "⏱️ **Record:** Last 5 Minit\n"
+            "⏱️️ **Record:** Last 5 Minit\n"
             "👑 **Top Range:** 🌐 23762XXX FB\n\n"
             "🌐 **Range List**\n"
             "• 23762XXX - FB - 46\n"
