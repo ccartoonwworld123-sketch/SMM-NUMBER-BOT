@@ -8,12 +8,11 @@ from flask import Flask
 # =========================================================
 # CONFIG & CREDENTIALS
 # =========================================================
+# Your New Bot Token
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAG6ny1a2IXUBBoA73grUKxqfggTi4wS44Y")
-VOLTX_API_KEY = "https://api.2009.cloud/MXS47FLFXOU/tnevs/@public/api/getnum"
-OTP_GROUP_CHAT_ID = "-1004436883235"
-OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
+VOLTX_API_KEY = "MNFO9XZGN7E"
 
-# Voltx Correct Base API Path based on your panel domain (voltxsms.com)
+# Voltx Correct Base API Path
 BASE_API_URL = "https://voltxsms.com/api"
 HEADERS = {
     "X-API-Key": VOLTX_API_KEY,
@@ -39,7 +38,6 @@ def get_user(user_id):
     return users[user_id]
 
 def fetch_panel_numbers(range_val):
-    # Trying common endpoint structures for VoltX panel
     urls = [
         f"{BASE_API_URL}/get-number?range={range_val}",
         f"https://voltxsms.com/m2/api/get-number?range={range_val}",
@@ -73,25 +71,6 @@ def fetch_panel_traffic():
             print(f"Traffic Error ({url}): {e}")
     return None
 
-def fetch_recent_otps():
-    urls = [
-        f"{BASE_API_URL}/success-otp",
-        f"https://voltxsms.com/m2/api/success-otp",
-        f"https://voltxsms.com/api/otps"
-    ]
-    for url in urls:
-        try:
-            response = requests.get(url, headers=HEADERS, timeout=4)
-            if response.status_code == 200:
-                data = response.json()
-                if isinstance(data, list):
-                    return data
-                if isinstance(data, dict):
-                    return data.get("data", {}).get("otps", data.get("otps", data.get("result", [])))
-        except Exception as e:
-            print(f"OTP Error ({url}): {e}")
-    return []
-
 # =========================================================
 # MAIN MENU
 # =========================================================
@@ -107,9 +86,6 @@ def main_menu():
     markup.add(
         types.KeyboardButton("🟢 Live Traffic"),
         types.KeyboardButton("💳 Balance")
-    )
-    markup.add(
-        types.KeyboardButton("📣 OTP Group")
     )
     return markup
 
@@ -127,38 +103,6 @@ def start(message):
         message.chat.id,
         text,
         reply_markup=main_menu()
-    )
-
-
-# =========================================================
-# OTP GROUP
-# =========================================================
-@bot.message_handler(func=lambda m: m.text == "📣 OTP Group")
-def otp_group_button(message):
-    send_otp_group(message.chat.id)
-
-@bot.callback_query_handler(func=lambda call: call.data == "otp_group")
-def otp_group_callback(call):
-    bot.answer_callback_query(call.id)
-    send_otp_group(call.message.chat.id)
-
-def send_otp_group(chat_id):
-    text = (
-        "📣 <b>Official Group</b>\n\n"
-        "Join our group for updates:\n"
-        f"🔗 {OTP_GROUP_LINK}"
-    )
-    markup = types.InlineKeyboardMarkup()
-    markup.add(
-        types.InlineKeyboardButton(
-            "📣 Join Group ↗",
-            url=OTP_GROUP_LINK
-        )
-    )
-    bot.send_message(
-        chat_id,
-        text,
-        reply_markup=markup
     )
 
 
@@ -194,7 +138,6 @@ def balance(message):
         text,
         reply_markup=markup
     )
-
 
 # =========================================================
 # SET BINANCE ID & WITHDRAW
@@ -273,7 +216,6 @@ def get_api_number(message):
                     num = "+" + num
                 numbers.append(num)
                 
-    # Fallback to sample numbers if panel returns empty format currently
     if not numbers:
         numbers = [f"+{range_val}920374", f"+{range_val}265497"]
 
@@ -329,50 +271,11 @@ def live_traffic(message):
 
 
 # =========================================================
-# BACKGROUND OTP WORKER
-# =========================================================
-def background_otp_worker():
-    import time
-    sent_ids = set()
-    time.sleep(2)
-    while True:
-        try:
-            otps = fetch_recent_otps()
-            if otps and isinstance(otps, list):
-                for otp in reversed(otps[:10]):
-                    otp_id = otp.get("otp_id") or otp.get("id") or otp.get("time") or str(otp)
-                    if otp_id not in sent_ids:
-                        sent_ids.add(otp_id)
-                        if len(sent_ids) > 150:
-                            sent_ids.pop()
-                            
-                        service = otp.get("source", otp.get("service", "Facebook"))
-                        message_text = otp.get("message", "Your verification code is...")
-                        country = otp.get("country", "Togo")
-                        range_val = otp.get("range", "22897")
-                        
-                        formatted_msg = (
-                            f"🟢 <b>OTP RECEIVED</b>\n"
-                            f"━━━━━━━━━━━━━━━━━━━\n"
-                            f"🌐 <b>Country</b> : {country}\n"
-                            f"🎯 <b>Range</b>   : {range_val}\n"
-                            f"✉ <b>Message</b> :\n{message_text}"
-                        )
-                        markup = types.InlineKeyboardMarkup()
-                        markup.add(types.InlineKeyboardButton("NUMBER BOT", url=f"https://t.me/{bot.get_me().username}"))
-                        bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, reply_markup=markup)
-        except Exception as e:
-            print(f"Worker Error: {e}")
-        
-        time.sleep(2)
-
-
-# =========================================================
 # FLASK & RUN
 # =========================================================
 @app.route("/")
 def home():
-    return "VoltX Panel Bot Sync is running live!"
+    return "VoltX Panel Bot is running live without OTP groups!"
 
 
 if __name__ == "__main__":
@@ -380,8 +283,7 @@ if __name__ == "__main__":
         app.run(host="0.0.0.0", port=8080)
 
     Thread(target=run_flask, daemon=True).start()
-    Thread(target=background_otp_worker, daemon=True).start()
-
-    print("🤖 Bot synced with VoltX panel successfully...")
+    
+    print("🤖 Bot is running...")
     bot.remove_webhook()
     bot.infinity_polling(skip_pending=True, interval=1, timeout=20)
