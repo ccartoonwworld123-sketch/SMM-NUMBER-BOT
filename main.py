@@ -71,9 +71,10 @@ def handle_menu_clicks(message):
 
     if text == "Get API Number":
         markup = types.InlineKeyboardMarkup()
-        # একদম সিম্পল নাম্বার ফরম্যাট (কোনো বাড়তি আইকন ছাড়া)
-        markup.add(types.InlineKeyboardButton("+22896280920", callback_data="copy_num"))
-        markup.add(types.InlineKeyboardButton("+22896980378", callback_data="copy_num"))
+        # Apnar chawa copy chinho (copy) shohor button gulo
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("+22896234416", callback_data="copy_num"))
+        markup.add(types.InlineKeyboardButton("+22896161787", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_num"))
         
         number_info = "🌐 Country : Togo\n⚙️ Range : 22896"
