@@ -80,8 +80,8 @@ def handle_menu_clicks(message):
 
     if text == "Get API Number":
         markup = types.InlineKeyboardMarkup()
-        markup.add(types.InlineKeyboardButton("📄 +22896280920", callback_data="copy_num"))
-        markup.add(types.InlineKeyboardButton("📄 +22896980378", callback_data="copy_num"))
+        markup.add(types.InlineKeyboardButton(" +22896280920", callback_data="copy_num"))
+        markup.add(types.InlineKeyboardButton(" +22896980378", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_num"))
         
         number_info = "🌐 Country : Togo\n⚙️ Range : 22896"
@@ -130,20 +130,20 @@ def handle_menu_clicks(message):
     else:
         bot.send_message(chat_id, "Please use the menu buttons below.", reply_markup=main_menu_keyboard())
 
-# --- Background Worker for Instant OTP Relay (1s interval) ---
+# --- Safe Background Worker (Prevents Conflict) ---
 def background_relay_worker():
     sent_ids = set()
-    time.sleep(5)
+    time.sleep(10) # Start thanda hoyar por start hobe
     while True:
         try:
             otps = fetch_recent_otps()
             if otps and isinstance(otps, list):
-                for otp in reversed(otps[:20]):
+                for otp in reversed(otps[:10]):
                     otp_id = otp.get("otp_id") or otp.get("time") or otp.get("number") or str(otp)
                     
                     if otp_id not in sent_ids:
                         sent_ids.add(otp_id)
-                        if len(sent_ids) > 150:
+                        if len(sent_ids) > 100:
                             sent_ids.pop()
                             
                         service = otp.get("service", otp.get("sid", "FB"))
@@ -171,7 +171,7 @@ def background_relay_worker():
         except Exception as e:
             print(f"Worker Error: {e}")
         
-        time.sleep(1)
+        time.sleep(5) # 5 second interval rakha holo jate API ba Telegram block na kore
 
 if __name__ == "__main__":
     def run_flask():
@@ -180,10 +180,10 @@ if __name__ == "__main__":
     
     Thread(target=background_relay_worker, daemon=True).start()
     
-    print("Clearing old webhooks and starting polling...")
+    print("Clearing webhooks and starting bot polling securely...")
     try:
         bot.remove_webhook()
     except Exception as e:
-        print(f"Webhook remove error: {e}")
+        print(f"Webhook error: {e}")
         
-    bot.infinity_polling(skip_pending=True)
+    bot.infinity_polling(skip_pending=True, interval=1, timeout=20)
