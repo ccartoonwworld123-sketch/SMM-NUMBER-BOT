@@ -1,18 +1,7 @@
-import sys
-import subprocess
-
-# অটোমেটিক লাইব্রেরি ইনস্টল করার ব্যবস্থা
-try:
-    import telebot
-    import requests
-    from flask import Flask
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyTelegramBotAPI", "requests", "flask"])
-    import telebot
-    import requests
-    from flask import Flask
-
 import time
+import requests
+import telebot
+from flask import Flask
 from threading import Thread
 
 # --- Configuration & Credentials ---
