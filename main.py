@@ -15,7 +15,7 @@ BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
 HEADERS = {
     "mauthapi": VOLTX_API_KEY,
     "Authorization": f"Bearer {VOLTX_API_KEY}",
-    "Content-Type": "application/json"
+    "Accept": "application/json"
 }
 
 # Initialize Telegram Bot & Flask App
@@ -26,24 +26,24 @@ app = Flask(__name__)
 def home():
     return "FB MASTER NUMBER Bot is active and running!"
 
-# --- Debug API Functions ---
+# --- API Function ---
 def fetch_recent_otps():
     url = f"{BASE_API_URL}/success-otp"
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
-        print(f"API Response Code: {response.status_code}")
-        print(f"API Response Body: {response.text}")
+        print(f"Status: {response.status_code}, Response: {response.text[:150]}")
         
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list):
                 return data
-            return data.get("data", {}).get("otps", data.get("otps", []))
+            if isinstance(data, dict):
+                return data.get("data", {}).get("otps", data.get("otps", data.get("result", [])))
     except Exception as e:
-        print(f"Error fetching OTPs: {e}")
+        print(f"Error: {e}")
     return []
 
-# --- Formatting OTP ---
+# --- Format OTP ---
 def format_otp_message(otp_item):
     service = otp_item.get("service", otp_item.get("sid", "FACEBOOK"))
     number = otp_item.get("number", "xxxxxxx")
@@ -63,28 +63,27 @@ def format_otp_message(otp_item):
 
 # --- Background Worker ---
 def background_relay_worker():
-    last_seen_otp_id = None
+    last_seen_id = None
     while True:
         try:
             otps = fetch_recent_otps()
-            if otps and isinstance(otps, list):
+            if otps and isinstance(otps, list) and len(otps) > 0:
                 latest = otps[0]
-                otp_id = latest.get("otp_id") or latest.get("time") or latest.get("number")
+                otp_id = latest.get("otp_id") or latest.get("time") or latest.get("number") or str(latest)
                 
-                if otp_id != last_seen_otp_id:
-                    last_seen_otp_id = otp_id
+                if otp_id != last_seen_id:
+                    last_seen_id = otp_id
                     formatted_msg = format_otp_message(latest)
                     bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, parse_mode="Markdown")
-                    print("OTP successfully sent to group!")
+                    print("OTP sent to group successfully!")
         except Exception as e:
-            print(f"Background worker error: {e}")
+            print(f"Worker Error: {e}")
         
         time.sleep(5)
 
-# --- Main Execution ---
+# --- Main ---
 if __name__ == "__main__":
-    print("Starting Flask, Bot, and Debug Background Worker...")
-    
+    print("Starting system...")
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
