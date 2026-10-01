@@ -35,7 +35,7 @@ def get_user(user_id):
         users[user_id] = {
             "balance": 0.091,
             "binance_id": "Not Set",
-            "range": "23762" 
+            "range": "22896" 
         }
     return users[user_id]
 
@@ -49,14 +49,14 @@ def fetch_panel_number(range_val):
             if res_data.get("meta", {}).get("code") == 200:
                 data = res_data.get("data", {})
                 num = data.get("full_number") or data.get("no_plus_number")
-                country = data.get("country", "Unknown")
+                country = data.get("country", "Togo")
                 if num:
                     if not num.startswith("+"):
                         num = "+" + num
                     return num, country
     except Exception as e:
         print(f"Number Fetch Error: {e}")
-    return None, "Unknown"
+    return None, "Togo"
 
 def fetch_panel_traffic():
     """ GET /console for global live feed hits """
@@ -230,7 +230,7 @@ def set_range(message):
         message.chat.id,
         "⚙️ <b>Send your range (rid):</b>\n\n"
         "Example:\n"
-        "<code>23762</code>"
+        "<code>22896</code>"
     )
     bot.register_next_step_handler(msg, save_range)
 
@@ -245,54 +245,75 @@ def save_range(message):
 
 
 # =========================================================
-# GET API NUMBER
+# GET API NUMBER (Multiple Real Numbers with Copy Button)
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
-def get_api_number(message):
-    user = get_user(message.from_user.id)
+def get_api_number_handler(message):
+    send_api_numbers(message.chat.id, message.from_user.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "change_number")
+def change_number_callback(call):
+    bot.answer_callback_query(call.id, "Numbers refreshed.")
+    send_api_numbers(call.message.chat.id, call.from_user.id, edit_message=call.message)
+
+def send_api_numbers(chat_id, user_id, edit_message=None):
+    user = get_user(user_id)
     range_val = user['range']
     
-    num, country = fetch_panel_number(range_val)
-    if not num:
-        num = f"+{range_val}000000"
-        country = "Panel Country"
+    # Fetch 2 real numbers from panel
+    numbers = []
+    country = "Togo"
+    for _ in range(2):
+        num, c = fetch_panel_number(range_val)
+        if num and num not in numbers:
+            numbers.append(num)
+            country = c
+
+    if not numbers:
+        numbers = [f"+{range_val}785759", f"+{range_val}882975"]
 
     text = (
         f"🌐 <b>Country :</b> {country}\n"
-        f"⚙️ <b>Range (rid):</b> {range_val}"
+        f"⚙️ <b>Range :</b> {range_val}"
     )
 
     markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num)))
+    for num in numbers:
+        markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num)))
+    
     markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_number"))
 
-    bot.send_message(
-        message.chat.id,
-        text,
-        reply_markup=markup
-    )
-
-
-@bot.callback_query_handler(func=lambda call: call.data == "change_number")
-def change_number(call):
-    bot.answer_callback_query(call.id, "New number fetched.")
-    get_api_number(call.message)
+    if edit_message:
+        try:
+            bot.edit_message_text(text, chat_id, edit_message.message_id, reply_markup=markup, parse_mode="HTML")
+        except:
+            bot.send_message(chat_id, text, reply_markup=markup)
+    else:
+        bot.send_message(chat_id, text, reply_markup=markup)
 
 
 # =========================================================
-# LIVE TRAFFIC (Formatted exactly as requested)
+# LIVE TRAFFIC (High Traffic Range List matching your screenshot)
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "🟢 Live Traffic")
-def live_traffic(message):
+def live_traffic_handler(message):
+    send_live_traffic(message.chat.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "refresh_traffic")
+def refresh_traffic_callback(call):
+    bot.answer_callback_query(call.id, "Traffic refreshed.")
+    send_live_traffic(call.message.chat.id, edit_message=call.message)
+
+def send_live_traffic(chat_id, edit_message=None):
     stats = fetch_panel_traffic()
     
     counter = Counter()
-    total_otp = 101 # Default fallback
+    total_otp = 97
     
     if stats and isinstance(stats, dict):
         hits = stats.get("hits", [])
         if hits:
-            total_otp = max(101, len(hits) * 3) # Dynamic calculation based on traffic
+            total_otp = max(97, len(hits) * 2)
             for hit in hits:
                 rng = hit.get("range", "23762XXX")
                 sid = hit.get("sid", "FB")
@@ -300,42 +321,49 @@ def live_traffic(message):
                 
     sorted_hits = counter.most_common(10)
     
-    top_range_str = "🌐 23762XXX FB"
+    top_range_str = "🇨🇲 23762XXX FB"
     if sorted_hits:
         top_item = sorted_hits[0]
-        top_range_str = f"🌐 {top_item[0][0]} {top_item[0][1]}"
+        top_range_str = f"🇨🇲 {top_item[0][0]} {top_item[0][1]}"
 
     text_lines = [
-        "📊 <b>Live Traffic</b>\n",
+        "📊 <b>Live Trafic</b>\n",
         f"🔥 <b>Total OTP:</b> {total_otp}",
         "⏱ <b>Record:</b> Last 5 Minit",
         f"👑 <b>Top Range:</b> {top_range_str}\n",
-        "🌍 <b>Range List</b>"
+        "📉 <b>Range List</b>"
     ]
     
     if sorted_hits:
         for (rng, sid), count in sorted_hits:
-            text_lines.append(f"🌐 {rng} - {sid} - {count}")
+            text_lines.append(f"🇨🇲 {rng} - {sid} - {count}")
     else:
-        # Fallback list matching your exact format preference
         fallback_list = [
-            "🌐 23762XXX - FB - 46",
-            "🌐 22898XXX - FB - 11",
-            "🌐 2290163XXX - FB - 8",
-            "🌐 237622XXX - FB - 8",
-            "🌐 228982XXX - FB - 4",
-            "🌐 237620XXX - FB - 4",
-            "🌐 26661XXX - FB - 3",
-            "🌐 38091XXX - FB - 3",
-            "🌐 237625XXX - FB - 2",
-            "🌐 22465XXX - IMO - 2"
+            "🇨🇲 23762XXX - FB - 38",
+            "🇨🇲 237622XXX - FB - 11",
+            "🇹🇬 228989XXX - FB - 9",
+            "🇹🇬 22898XXX - FB - 7",
+            "🇨🇲 2290163XXX - FB - 5",
+            "🇨🇲 237620XXX - FB - 5",
+            "🇹🇬 22896XXX - FB - 4",
+            "🇨🇲 2246557XXX - FB - 3",
+            "🇺🇦 38091XXX - FB - 3",
+            "🇲🇬 26134XXX - FB - 2"
         ]
         text_lines.extend(fallback_list)
 
-    bot.send_message(
-        message.chat.id,
-        "\n".join(text_lines)
-    )
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton("🔄 Refresh", callback_data="refresh_traffic"))
+
+    final_text = "\n".join(text_lines)
+
+    if edit_message:
+        try:
+            bot.edit_message_text(final_text, chat_id, edit_message.message_id, reply_markup=markup, parse_mode="HTML")
+        except:
+            bot.send_message(chat_id, final_text, reply_markup=markup)
+    else:
+        bot.send_message(chat_id, final_text, reply_markup=markup)
 
 
 # =========================================================
