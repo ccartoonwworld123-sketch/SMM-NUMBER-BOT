@@ -13,10 +13,6 @@ VOLTX_API_KEY = "MHPU3S5IV1A"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
 
-# Mandatory Channel for Subscription Check
-REQUIRED_CHANNEL = "@A_ToolsX"  # অথবা চ্যানেলের চ্যাট আইডি/ইউজারনেম
-CHANNEL_INVITE_LINK = "https://t.me/A_ToolsX"
-
 # Voltx API Base Path
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
 HEADERS = {
@@ -29,7 +25,7 @@ app = Flask(__name__)
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
 # =========================================================
-# USER DATA & MEMBERSHIP CHECK
+# USER DATA
 # =========================================================
 users = {}
 
@@ -41,30 +37,6 @@ def get_user(user_id):
             "range": "22896"
         }
     return users[user_id]
-
-def is_member(user_id):
-    try:
-        member = bot.get_chat_member(REQUIRED_CHANNEL, user_id)
-        # যদি মেম্বারশিপ status এগুলো হয় তবে সে জয়েন করেছে
-        if member.status in ["member", "administrator", "creator"]:
-            return True
-    except Exception as e:
-        print(f"Membership Check Error: {e}")
-    return False
-
-def send_subscription_required(chat_id):
-    text = (
-        "🚀 <b>To use this bot, you must join our channel:</b>\n"
-        f"🔗 {CHANNEL_INVITE_LINK}"
-    )
-    markup = types.InlineKeyboardMarkup()
-    markup.add(
-        types.InlineKeyboardButton(
-            "📢 VIEW CHANNEL",
-            url=CHANNEL_INVITE_LINK
-        )
-    )
-    bot.send_message(chat_id, text, reply_markup=markup)
 
 def fetch_recent_otps():
     url = f"{BASE_API_URL}/success-otp"
@@ -107,13 +79,7 @@ def main_menu():
 # =========================================================
 @bot.message_handler(commands=["start"])
 def start(message):
-    user_id = message.from_user.id
-
-    if not is_member(user_id):
-        send_subscription_required(message.chat.id)
-        return
-
-    user = get_user(user_id)
+    user = get_user(message.from_user.id)
 
     text = (
         "👋 <b>Welcome to FB MASTER NUMBER</b>\n\n"
@@ -159,17 +125,10 @@ def start(message):
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "📣 OTP Group")
 def otp_group_button(message):
-    if not is_member(message.from_user.id):
-        send_subscription_required(message.chat.id)
-        return
     send_otp_group(message.chat.id)
 
 @bot.callback_query_handler(func=lambda call: call.data == "otp_group")
 def otp_group_callback(call):
-    if not is_member(call.from_user.id):
-        bot.answer_callback_query(call.id, "❌ Please join the channel first!", show_alert=True)
-        send_subscription_required(call.message.chat.id)
-        return
     bot.answer_callback_query(call.id)
     send_otp_group(call.message.chat.id)
 
@@ -198,10 +157,6 @@ def send_otp_group(chat_id):
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "💳 Balance")
 def balance(message):
-    if not is_member(message.from_user.id):
-        send_subscription_required(message.chat.id)
-        return
-
     user = get_user(message.from_user.id)
 
     text = (
@@ -236,11 +191,6 @@ def balance(message):
 # =========================================================
 @bot.callback_query_handler(func=lambda call: call.data == "set_binance")
 def set_binance(call):
-    if not is_member(call.from_user.id):
-        bot.answer_callback_query(call.id, "❌ Please join the channel first!", show_alert=True)
-        send_subscription_required(call.message.chat.id)
-        return
-
     bot.answer_callback_query(call.id)
     msg = bot.send_message(
         call.message.chat.id,
@@ -249,10 +199,6 @@ def set_binance(call):
     bot.register_next_step_handler(msg, save_binance_id)
 
 def save_binance_id(message):
-    if not is_member(message.from_user.id):
-        send_subscription_required(message.chat.id)
-        return
-
     user = get_user(message.from_user.id)
     user["binance_id"] = message.text.strip()
     bot.send_message(
@@ -267,11 +213,6 @@ def save_binance_id(message):
 # =========================================================
 @bot.callback_query_handler(func=lambda call: call.data == "withdraw")
 def withdraw(call):
-    if not is_member(call.from_user.id):
-        bot.answer_callback_query(call.id, "❌ Please join the channel first!", show_alert=True)
-        send_subscription_required(call.message.chat.id)
-        return
-
     user = get_user(call.from_user.id)
 
     if user["balance"] < 0.2:
@@ -300,12 +241,8 @@ def withdraw(call):
 # =========================================================
 # SET RANGE
 # =========================================================
-@bot.message_handler(func=lambda m: m.text == "⚙️ Set Range")
+@bot.message_handler(func=lambda m: m.text == "⚙️️ Set Range")
 def set_range(message):
-    if not is_member(message.from_user.id):
-        send_subscription_required(message.chat.id)
-        return
-
     msg = bot.send_message(
         message.chat.id,
         "⚙️ <b>Send your range:</b>\n\n"
@@ -315,10 +252,6 @@ def set_range(message):
     bot.register_next_step_handler(msg, save_range)
 
 def save_range(message):
-    if not is_member(message.from_user.id):
-        send_subscription_required(message.chat.id)
-        return
-
     user = get_user(message.from_user.id)
     user["range"] = message.text.strip()
     bot.send_message(
@@ -333,10 +266,6 @@ def save_range(message):
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
 def get_api_number(message):
-    if not is_member(message.from_user.id):
-        send_subscription_required(message.chat.id)
-        return
-
     user = get_user(message.from_user.id)
 
     text = (
@@ -362,18 +291,10 @@ def get_api_number(message):
 # =========================================================
 @bot.callback_query_handler(func=lambda call: call.data in ["number_1", "number_2"])
 def number_selected(call):
-    if not is_member(call.from_user.id):
-        bot.answer_callback_query(call.id, "❌ Please join the channel first!", show_alert=True)
-        send_subscription_required(call.message.chat.id)
-        return
     bot.answer_callback_query(call.id, "Number selected.")
 
 @bot.callback_query_handler(func=lambda call: call.data == "change_number")
 def change_number(call):
-    if not is_member(call.from_user.id):
-        bot.answer_callback_query(call.id, "❌ Please join the channel first!", show_alert=True)
-        send_subscription_required(call.message.chat.id)
-        return
     bot.answer_callback_query(call.id, "Number changed.")
     bot.send_message(
         call.message.chat.id,
@@ -386,10 +307,6 @@ def change_number(call):
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "🟢 Live Traffic")
 def live_traffic(message):
-    if not is_member(message.from_user.id):
-        send_subscription_required(message.chat.id)
-        return
-
     text = (
         "🟢 <b>Live Traffic</b>\n\n"
         "📊 Active: 1\n"
