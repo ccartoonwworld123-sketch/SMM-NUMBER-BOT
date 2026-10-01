@@ -1,18 +1,7 @@
-import sys
-import subprocess
-
-# সার্ভারে লাইব্রেরি না থাকলে অটোমেটিক ইনস্টল করে নেবে
-try:
-    import telebot
-    import requests
-    from flask import Flask
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyTelegramBotAPI", "requests", "flask"])
-    import telebot
-    import requests
-    from flask import Flask
-
 import time
+import requests
+import telebot
+from flask import Flask, render_template_string
 from threading import Thread
 
 # --- Configuration & Credentials ---
@@ -32,17 +21,10 @@ HEADERS = {
 bot = telebot.TeleBot(BOT_TOKEN)
 app = Flask(__name__)
 
-@app.route("/")
-def home():
-    return "FB MASTER NUMBER Bot is active and running!"
-
-# --- API Function ---
 def fetch_recent_otps():
     url = f"{BASE_API_URL}/success-otp"
     try:
         response = requests.get(url, headers=HEADERS, timeout=10)
-        print(f"Status: {response.status_code}, Response: {response.text[:150]}")
-        
         if response.status_code == 200:
             data = response.json()
             if isinstance(data, list):
@@ -50,10 +32,39 @@ def fetch_recent_otps():
             if isinstance(data, dict):
                 return data.get("data", {}).get("otps", data.get("otps", data.get("result", [])))
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"OTP Error: {e}")
     return []
 
-# --- Format OTP ---
+# --- Web Panel UI ---
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Voltx Panel Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
+        .container { max-width: 900px; margin: auto; background: #1e293b; padding: 20px; border-radius: 10px; }
+        h1 { color: #38bdf8; }
+        .card { background: #334155; padding: 15px; margin: 10px 0; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ Voltx Instant Relay Panel</h1>
+        <div class="card">
+            <h3>Status: High-Speed Relay Active (1s check)</h3>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+@app.route("/")
+def home():
+    return render_template_string(HTML_TEMPLATE)
+
 def format_otp_message(otp_item):
     service = otp_item.get("service", otp_item.get("sid", "FACEBOOK"))
     number = otp_item.get("number", "xxxxxxx")
@@ -63,6 +74,7 @@ def format_otp_message(otp_item):
     country = otp_item.get("country", "")
 
     formatted_msg = (
+        f"🔹 **NEW OTP / CODE**\n"
         f"🔹 **{service}**  `{number}`\n"
         f"💬 {message_text}\n"
     )
@@ -71,29 +83,33 @@ def format_otp_message(otp_item):
         
     return formatted_msg
 
-# --- Background Worker ---
+# --- Instant Background Worker (1s interval & multi-code check) ---
 def background_relay_worker():
-    last_seen_id = None
+    sent_ids = set()
     while True:
         try:
             otps = fetch_recent_otps()
-            if otps and isinstance(otps, list) and len(otps) > 0:
-                latest = otps[0]
-                otp_id = latest.get("otp_id") or latest.get("time") or latest.get("number") or str(latest)
-                
-                if otp_id != last_seen_id:
-                    last_seen_id = otp_id
-                    formatted_msg = format_otp_message(latest)
-                    bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, parse_mode="Markdown")
-                    print("OTP sent to group successfully!")
+            if otps and isinstance(otps, list):
+                # সাম্প্রতিক কোডগুলো চেক করে যেগুলো পাঠানো হয়নি, সেগুলো সিরিয়ালের পাঠাবে
+                for otp in reversed(otps[:20]):
+                    otp_id = otp.get("otp_id") or otp.get("time") or otp.get("number") or str(otp)
+                    
+                    if otp_id not in sent_ids:
+                        sent_ids.add(otp_id)
+                        if len(sent_ids) > 150:
+                            sent_ids.pop()
+                            
+                        formatted_msg = format_otp_message(otp)
+                        bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, parse_mode="Markdown")
+                        print("Instant OTP sent to group successfully!")
         except Exception as e:
             print(f"Worker Error: {e}")
         
-        time.sleep(5)
+        time.sleep(1) # প্রতি ১ সেকেন্ড পর পর চেক করবে
 
-# --- Main ---
+# --- Main Execution ---
 if __name__ == "__main__":
-    print("Starting system...")
+    print("Starting instant panel relay system...")
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
