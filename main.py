@@ -159,6 +159,7 @@ def balance(message):
         f"🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\n"
         "Minimum withdraw is <b>$0.2</b>"
     )
+    
     markup = types.InlineKeyboardMarkup(row_width=1)
     markup.add(
         types.InlineKeyboardButton(
@@ -288,7 +289,10 @@ def send_api_numbers(chat_id, user_id, edit_message=None):
     
     if numbers:
         for num in numbers:
-            markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num) if hasattr(types, 'CopyTextButton') else None))
+            try:
+                markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num)))
+            except:
+                markup.add(types.InlineKeyboardButton(num, callback_data="dummy"))
     else:
         text += "\n\n⚠️ <i>No active numbers found from panel right now. Please try again or change range.</i>"
 
