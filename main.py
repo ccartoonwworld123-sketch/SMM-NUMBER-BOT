@@ -5,13 +5,12 @@ import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, CopyTextButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8752686767:AAGiwPVrhS2ghoEgCdmook8cJxLRuPo_UA0")
 
 VOLTX_API_KEY = "MHPU3S5IV1A"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
 YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
 
-# আপনার গ্রুপের সঠিক Chat ID এখানে বসানো হলো
 OTP_GROUP_CHAT_ID = os.environ.get("OTP_GROUP_CHAT_ID", "-1002340808169") 
 
 USER_STATES = {}
@@ -186,6 +185,8 @@ async def poll_for_otp(chat_id, order_id, phone, user_range, context):
             print(f"Polling Send Error: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    USER_STATES[user_id] = None
     reply_keyboard = [
         ["📞 Get API Number", "⚙️ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
@@ -197,16 +198,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
-
-    if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
-        clean_text = text.strip()
-        if "x" in clean_text.lower() or clean_text.isdigit():
-            USER_STATES[user_id] = None
-            USER_RANGES[user_id] = clean_text
-            await update.message.reply_text(f"🔴 Target range updated successfully to: <b>{clean_text}</b>", parse_mode="HTML")
-        else:
-            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
-        return
 
     if text == "📞 Get API Number":
         USER_STATES[user_id] = None
@@ -255,7 +246,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     live_text += "No recent traffic found in console."
                 await update.message.reply_text(live_text, parse_mode="HTML")
             else:
-                await update.message.reply_text("⚠️️ Failed to fetch live traffic from panel.")
+                await update.message.reply_text("⚠️ Failed to fetch live traffic from panel.")
         except Exception as e:
             await update.message.reply_text(f"⚠️ Error fetching live traffic: {e}")
 
@@ -271,6 +262,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "📣 OTP Group":
         USER_STATES[user_id] = None
         await update.message.reply_text(f"📣 Join our OTP Group: t.me/{YOUR_TELEGRAM_USERNAME}")
+
+    elif USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
+        clean_text = text.strip()
+        if "x" in clean_text.lower() or clean_text.isdigit():
+            USER_STATES[user_id] = None
+            USER_RANGES[user_id] = clean_text
+            await update.message.reply_text(f"🔴 Target range updated successfully to: <b>{clean_text}</b>", parse_mode="HTML")
+        else:
+            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
+        return
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
