@@ -174,12 +174,10 @@ def background_relay_worker():
         time.sleep(1)
 
 if __name__ == "__main__":
-    # Flask Server Thread
     def run_flask():
         app.run(host="0.0.0.0", port=8080)
     Thread(target=run_flask, daemon=True).start()
     
-    # Background OTP Relay Thread
     Thread(target=background_relay_worker, daemon=True).start()
     
     print("Bot is starting polling...")
