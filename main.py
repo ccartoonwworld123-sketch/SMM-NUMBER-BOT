@@ -2,7 +2,6 @@ import time
 import requests
 import telebot
 from telebot import types
-from flask import Flask
 from threading import Thread
 import os
 
@@ -20,9 +19,8 @@ HEADERS = {
     "Accept": "application/json"
 }
 
-# Initialize Telegram Bot & Flask App
+# Initialize Telegram Bot
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="Markdown")
-app = Flask(__name__)
 
 def get_balance():
     try:
@@ -46,10 +44,6 @@ def fetch_recent_otps():
     except Exception as e:
         print(f"OTP Error: {e}")
     return []
-
-@app.route("/")
-def home():
-    return "Bot is running live!"
 
 # --- Keyboards ---
 def main_menu_keyboard():
@@ -80,7 +74,6 @@ def handle_menu_clicks(message):
 
     if text == "Get API Number":
         markup = types.InlineKeyboardMarkup()
-        # 📋 আইকনটি সরিয়ে দেওয়া হয়েছে
         markup.add(types.InlineKeyboardButton("+22896234416", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("+22896161787", callback_data="copy_num"))
         markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_num"))
@@ -148,7 +141,6 @@ def background_relay_worker():
                             sent_ids.pop()
                             
                         service = otp.get("service", otp.get("sid", "FB"))
-                        number = otp.get("number", "23762XXXX")
                         message_text = otp.get("message", "Facebook: Your code is 240022")
                         country = otp.get("country", "CM")
                         range_val = otp.get("range", "23762XXX")
@@ -176,10 +168,7 @@ def background_relay_worker():
         time.sleep(1)
 
 if __name__ == "__main__":
-    def run_flask():
-        app.run(host="0.0.0.0", port=8080)
-    Thread(target=run_flask, daemon=True).start()
-    
+    # ব্যাকগ্রাউন্ড ওটিপি রিলে ওয়ার্কার চালু করা হলো
     Thread(target=background_relay_worker, daemon=True).start()
     
     print("Bot is starting polling...")
