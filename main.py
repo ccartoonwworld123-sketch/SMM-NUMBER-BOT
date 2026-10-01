@@ -4,17 +4,16 @@ import requests
 import telebot
 from telebot import types
 from flask import Flask
-from collections import Counter
 
 # =========================================================
-# CONFIG & CREDENTIALS (Your Verified Setup)
+# CONFIG & CREDENTIALS (As per your screenshot)
 # =========================================================
-BOT_TOKEN = "8752686767:AAEc3baCymIbw2RE3jSaM1S6jIc5goE3Cg0"
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAGbez-t_ZhrsEbp79Wd1oYM4avQ9j1dP8Q")
 VOLTX_API_KEY = "M50JCU9H8WW"
 OTP_GROUP_CHAT_ID = "-1004436883235"
 OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
 
-# Exact Panel API Base Path & Headers
+# Exact Base Path from your API docs
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFXOU/tnevs/@public/api"
 HEADERS = {
     "mauthapi": VOLTX_API_KEY,
@@ -35,12 +34,12 @@ def get_user(user_id):
         users[user_id] = {
             "balance": 0.091,
             "binance_id": "Not Set",
-            "range": "22896" 
+            "range": "2281" # Example range from your docs
         }
     return users[user_id]
 
 def fetch_panel_number(range_val):
-    """ POST /getnum with {"rid": range_val} """
+    """ POST /getnum with {"rid": range_val} as shown in screenshot """
     url = f"{BASE_API_URL}/getnum"
     try:
         response = requests.post(url, headers=HEADERS, json={"rid": range_val}, timeout=5)
@@ -49,14 +48,13 @@ def fetch_panel_number(range_val):
             if res_data.get("meta", {}).get("code") == 200:
                 data = res_data.get("data", {})
                 num = data.get("full_number") or data.get("no_plus_number")
-                country = data.get("country", "Togo")
                 if num:
                     if not num.startswith("+"):
                         num = "+" + num
-                    return num, country
+                    return num
     except Exception as e:
         print(f"Number Fetch Error: {e}")
-    return None, "Togo"
+    return None
 
 def fetch_panel_traffic():
     """ GET /console for global live feed hits """
@@ -72,7 +70,7 @@ def fetch_panel_traffic():
     return None
 
 def fetch_recent_otps():
-    """ GET /success-otp for last successful OTPs """
+    """ GET /success-otp for last 50 successful OTPs """
     url = f"{BASE_API_URL}/success-otp"
     try:
         response = requests.get(url, headers=HEADERS, timeout=5)
@@ -107,7 +105,7 @@ def main_menu():
 
 
 # =========================================================
-# START COMMAND
+# START
 # =========================================================
 @bot.message_handler(commands=["start"])
 def start(message):
@@ -128,6 +126,11 @@ def start(message):
 @bot.message_handler(func=lambda m: m.text == "📣 OTP Group")
 def otp_group_button(message):
     send_otp_group(message.chat.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "otp_group")
+def otp_group_callback(call):
+    bot.answer_callback_query(call.id)
+    send_otp_group(call.message.chat.id)
 
 def send_otp_group(chat_id):
     text = (
@@ -155,27 +158,65 @@ def send_otp_group(chat_id):
 @bot.message_handler(func=lambda m: m.text == "💳 Balance")
 def balance(message):
     user = get_user(message.from_user.id)
+
     text = (
         f"💰 <b>Current Balance:</b> ${user['balance']:.3f}\n"
         f"🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\n"
         "Minimum withdraw is <b>$0.2</b>"
     )
+
     markup = types.InlineKeyboardMarkup(row_width=1)
-    markup.add(types.InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw"))
-    markup.add(types.InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance"))
-    bot.send_message(message.chat.id, text, reply_markup=markup)
+    markup.add(
+        types.InlineKeyboardButton(
+            "💳 Withdraw via Binance",
+            callback_data="withdraw"
+        )
+    )
+    markup.add(
+        types.InlineKeyboardButton(
+            "🔴 Set Binance ID",
+            callback_data="set_binance"
+        )
+    )
+
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=markup
+    )
 
 
+# =========================================================
+# SET BINANCE ID & WITHDRAW
+# =========================================================
 @bot.callback_query_handler(func=lambda call: call.data == "set_binance")
 def set_binance(call):
     bot.answer_callback_query(call.id)
-    msg = bot.send_message(call.message.chat.id, "🆔 <b>Send your Binance Pay ID:</b>")
+    msg = bot.send_message(
+        call.message.chat.id,
+        "🆔 <b>Send your Binance Pay ID:</b>"
+    )
     bot.register_next_step_handler(msg, save_binance_id)
 
 def save_binance_id(message):
     user = get_user(message.from_user.id)
     user["binance_id"] = message.text.strip()
-    bot.send_message(message.chat.id, "✅ <b>Binance Pay ID saved successfully.</b>", reply_markup=main_menu())
+    bot.send_message(
+        message.chat.id,
+        "✅ <b>Binance Pay ID saved successfully.</b>",
+        reply_markup=main_menu()
+    )
+
+@bot.callback_query_handler(func=lambda call: call.data == "withdraw")
+def withdraw(call):
+    user = get_user(call.from_user.id)
+    if user["balance"] < 0.2:
+        bot.answer_callback_query(call.id, "❌ Minimum withdraw is $0.2", show_alert=True)
+        return
+    if user["binance_id"] == "Not Set":
+        bot.answer_callback_query(call.id, "❌ Please set Binance Pay ID first.", show_alert=True)
+        return
+    bot.answer_callback_query(call.id, "✅ Withdrawal request received.", show_alert=True)
 
 
 # =========================================================
@@ -187,7 +228,7 @@ def set_range(message):
         message.chat.id,
         "⚙️ <b>Send your range (rid):</b>\n\n"
         "Example:\n"
-        "<code>22896</code>"
+        "<code>2281</code>"
     )
     bot.register_next_step_handler(msg, save_range)
 
@@ -202,126 +243,70 @@ def save_range(message):
 
 
 # =========================================================
-# GET API NUMBER
+# GET API NUMBER (Real Panel POST /getnum)
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
-def get_api_number_handler(message):
-    send_api_numbers(message.chat.id, message.from_user.id)
-
-@bot.callback_query_handler(func=lambda call: call.data == "change_number")
-def change_number_callback(call):
-    bot.answer_callback_query(call.id, "Numbers refreshed.")
-    send_api_numbers(call.message.chat.id, call.from_user.id, edit_message=call.message)
-
-def send_api_numbers(chat_id, user_id, edit_message=None):
-    user = get_user(user_id)
+def get_api_number(message):
+    user = get_user(message.from_user.id)
     range_val = user['range']
     
-    numbers = []
-    country = "Togo"
-    for _ in range(2):
-        num, c = fetch_panel_number(range_val)
-        if num and num not in numbers:
-            numbers.append(num)
-            country = c
-
-    if not numbers:
-        numbers = [f"+{range_val}785759", f"+{range_val}882975"]
+    # Fetch real number using POST request with rid
+    num = fetch_panel_number(range_val)
+    if not num:
+        num = f"+{range_val}000000" # Fallback if out of stock
 
     text = (
-        f"🌐 <b>Country :</b> {country}\n"
-        f"⚙️ <b>Range :</b> {range_val}"
+        f"🌐 <b>Country :</b> Panel Range\n"
+        f"⚙️ <b>Range (rid):</b> {range_val}"
     )
 
     markup = types.InlineKeyboardMarkup(row_width=1)
-    for num in numbers:
-        markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num)))
-    
+    # Native copy button
+    markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num)))
     markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_number"))
 
-    if edit_message:
-        try:
-            bot.edit_message_text(text, chat_id, edit_message.message_id, reply_markup=markup, parse_mode="HTML")
-        except:
-            bot.send_message(chat_id, text, reply_markup=markup)
-    else:
-        bot.send_message(chat_id, text, reply_markup=markup)
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=markup
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "change_number")
+def change_number(call):
+    bot.answer_callback_query(call.id, "New number fetched.")
+    get_api_number(call.message)
 
 
 # =========================================================
-# LIVE TRAFFIC
+# LIVE TRAFFIC (Real Panel Console Feed)
 # =========================================================
 @bot.message_handler(func=lambda m: m.text == "🟢 Live Traffic")
-def live_traffic_handler(message):
-    send_live_traffic(message.chat.id)
-
-@bot.callback_query_handler(func=lambda call: call.data == "refresh_traffic")
-def refresh_traffic_callback(call):
-    bot.answer_callback_query(call.id, "Traffic refreshed.")
-    send_live_traffic(call.message.chat.id, edit_message=call.message)
-
-def send_live_traffic(chat_id, edit_message=None):
+def live_traffic(message):
     stats = fetch_panel_traffic()
-    counter = Counter()
-    total_otp = 97
+    hits_count = 0
+    services_str = "No recent hit"
     
     if stats and isinstance(stats, dict):
         hits = stats.get("hits", [])
+        hits_count = len(hits)
         if hits:
-            total_otp = max(97, len(hits) * 2)
-            for hit in hits:
-                rng = hit.get("range", "23762XXX")
-                sid = hit.get("sid", "FB")
-                counter[(rng, sid)] += 1
-                
-    sorted_hits = counter.most_common(10)
-    top_range_str = "🇨🇲 23762XXX FB"
-    if sorted_hits:
-        top_item = sorted_hits[0]
-        top_range_str = f"🇨🇲 {top_item[0][0]} {top_item[0][1]}"
+            latest = hits[0]
+            services_str = f"Range: {latest.get('range')}, Service: {latest.get('sid')}"
 
-    text_lines = [
-        "📊 <b>Live Trafic</b>\n",
-        f"🔥 <b>Total OTP:</b> {total_otp}",
-        "⏱ <b>Record:</b> Last 5 Minit",
-        f"👑 <b>Top Range:</b> {top_range_str}\n",
-        "📉 <b>Range List</b>"
-    ]
-    
-    if sorted_hits:
-        for (rng, sid), count in sorted_hits:
-            text_lines.append(f"🇨🇲 {rng} - {sid} - {count}")
-    else:
-        fallback_list = [
-            "🇨🇲 23762XXX - FB - 38",
-            "🇨🇲 237622XXX - FB - 11",
-            "🇹🇬 228989XXX - FB - 9",
-            "🇹🇬 22898XXX - FB - 7",
-            "🇨🇲 2290163XXX - FB - 5",
-            "🇨🇲 237620XXX - FB - 5",
-            "🇹🇬 22896XXX - FB - 4",
-            "🇨🇲 2246557XXX - FB - 3",
-            "🇺🇦 38091XXX - FB - 3",
-            "🇲🇬 26134XXX - FB - 2"
-        ]
-        text_lines.extend(fallback_list)
-
-    markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton("🔄 Refresh", callback_data="refresh_traffic"))
-
-    final_text = "\n".join(text_lines)
-
-    if edit_message:
-        try:
-            bot.edit_message_text(final_text, chat_id, edit_message.message_id, reply_markup=markup, parse_mode="HTML")
-        except:
-            bot.send_message(chat_id, final_text, reply_markup=markup)
-    else:
-        bot.send_message(chat_id, final_text, reply_markup=markup)
+    text = (
+        "🟢 <b>Live Traffic (Panel Console)</b>\n\n"
+        f"📊 Total Recent Hits: {hits_count}\n"
+        f"🔥 Latest Hit: {services_str}"
+    )
+    bot.send_message(
+        message.chat.id,
+        text
+    )
 
 
 # =========================================================
-# BACKGROUND OTP WORKER
+# BACKGROUND OTP WORKER (1 Second Fast Delivery)
 # =========================================================
 def background_otp_worker():
     import time
@@ -352,6 +337,7 @@ def background_otp_worker():
                         bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, reply_markup=markup)
         except Exception as e:
             print(f"Worker Error: {e}")
+        
         time.sleep(1)
 
 
@@ -360,7 +346,7 @@ def background_otp_worker():
 # =========================================================
 @app.route("/")
 def home():
-    return "VoltX Panel Bot Sync is running live!"
+    return "VoltX Panel Bot Sync is running live with correct API!"
 
 
 if __name__ == "__main__":
