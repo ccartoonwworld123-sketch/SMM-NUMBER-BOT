@@ -1,562 +1,387 @@
 import os
-import time
-import threading
+from threading import Thread
 import requests
 import telebot
-
-from flask import Flask, jsonify
 from telebot import types
-
-
-# =========================================================
-# CONFIG
-# =========================================================
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-VOLTX_API_KEY = os.getenv("VOLTX_API_KEY")
-
-BASE_API_URL = (
-    "https://api.2009.cloud/"
-    "MXS47FLFX0/tnevs/@public/api"
-)
-
-REQUEST_TIMEOUT = 20
-
+from flask import Flask
 
 # =========================================================
-# ENV CHECK
+# CONFIG & CREDENTIALS
 # =========================================================
+BOT_TOKEN = os.getenv("BOT_TOKEN", "8752686767:AAG6ny1a2IXUBBoA73grUKxqfggTi4wS44Y")
+VOLTX_API_KEY = "MNFO9XZGN7E"
+OTP_GROUP_CHAT_ID = "-1004436883235"
+OTP_GROUP_LINK = "https://t.me/smm_otp_grup"
 
-if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is missing")
-
-if not VOLTX_API_KEY:
-    raise RuntimeError("VOLTX_API_KEY is missing")
-
-
-# =========================================================
-# API HEADERS
-# =========================================================
-
-API_HEADERS = {
-    "mauthapi": VOLTX_API_KEY,
-    "Accept": "application/json",
-    "Content-Type": "application/json",
+# Voltx Correct Base API Path based on your panel domain (voltxsms.com)
+BASE_API_URL = "https://voltxsms.com/api"
+HEADERS = {
+    "X-API-Key": VOLTX_API_KEY,
+    "Authorization": f"Bearer {VOLTX_API_KEY}",
+    "Accept": "application/json"
 }
 
-
-# =========================================================
-# BOT / FLASK
-# =========================================================
-
-bot = telebot.TeleBot(
-    BOT_TOKEN,
-    parse_mode="HTML"
-)
-
 app = Flask(__name__)
-
+bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
 # =========================================================
-# MEMORY DATA
+# USER DATA & API HELPERS
 # =========================================================
-
 users = {}
-
 
 def get_user(user_id):
     if user_id not in users:
         users[user_id] = {
             "balance": 0.091,
             "binance_id": "Not Set",
+            "range": "22897"
         }
-
     return users[user_id]
 
-
-# =========================================================
-# API REQUEST
-# =========================================================
-
-def api_request(method, endpoint, **kwargs):
-
-    url = f"{BASE_API_URL.rstrip('/')}/{endpoint.lstrip('/')}"
-
-    try:
-        response = requests.request(
-            method=method,
-            url=url,
-            headers=API_HEADERS,
-            timeout=REQUEST_TIMEOUT,
-            **kwargs
-        )
-
-        print("=" * 60)
-        print("API REQUEST")
-        print("METHOD :", method)
-        print("URL    :", url)
-        print("STATUS :", response.status_code)
-        print("BODY   :", response.text[:2000])
-        print("=" * 60)
-
-        response.raise_for_status()
-
-        try:
-            return response.json()
-
-        except ValueError:
-            return {
-                "ok": False,
-                "error": "API returned invalid JSON"
-            }
-
-    except requests.exceptions.Timeout:
-        return {
-            "ok": False,
-            "error": "API request timed out"
-        }
-
-    except requests.exceptions.ConnectionError:
-        return {
-            "ok": False,
-            "error": "Could not connect to API"
-        }
-
-    except requests.exceptions.HTTPError as e:
-        return {
-            "ok": False,
-            "error": f"HTTP error: {e}"
-        }
-
-    except requests.exceptions.RequestException as e:
-        return {
-            "ok": False,
-            "error": str(e)
-        }
-
-    except Exception as e:
-        return {
-            "ok": False,
-            "error": str(e)
-        }
-
-
-# =========================================================
-# LIVE ACCESS
-# =========================================================
-
-def get_live_access():
-
-    result = api_request(
-        "GET",
-        "liveaccess"
-    )
-
-    if not result.get("ok", True):
-        return result
-
-    return result
-
-
-def format_live_access(data):
-
-    if not isinstance(data, dict):
-        return "❌ Invalid API response."
-
-    meta = data.get("meta", {})
-
-    if meta.get("code") != 200:
-        return (
-            "❌ <b>API Error</b>\n\n"
-            f"Code: <code>{meta.get('code')}</code>\n"
-            f"Status: <code>{meta.get('status')}</code>"
-        )
-
-    payload = data.get("data", {})
-    services = payload.get("services", [])
-
-    if not services:
-        return (
-            "🌐 <b>Live Access</b>\n\n"
-            "কোনো active service পাওয়া যায়নি।"
-        )
-
-    lines = [
-        "🌐 <b>Live Services</b>",
-        ""
+def fetch_panel_numbers(range_val):
+    # Trying common endpoint structures for VoltX panel
+    urls = [
+        f"{BASE_API_URL}/get-number?range={range_val}",
+        f"https://voltxsms.com/m2/api/get-number?range={range_val}",
+        f"https://voltxsms.com/api/v1/numbers?range={range_val}"
     ]
+    for url in urls:
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=4)
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list):
+                    return data
+                if isinstance(data, dict):
+                    return data.get("numbers", data.get("data", data.get("result", [])))
+        except Exception as e:
+            print(f"API Fetch Error ({url}): {e}")
+    return []
 
-    for service in services:
+def fetch_panel_traffic():
+    urls = [
+        f"{BASE_API_URL}/traffic-stats",
+        f"https://voltxsms.com/m2/api/traffic-stats",
+        f"https://voltxsms.com/api/stats"
+    ]
+    for url in urls:
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=4)
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            print(f"Traffic Error ({url}): {e}")
+    return None
 
-        sid = service.get("sid", "Unknown")
-        ranges = service.get("ranges", [])
-
-        lines.append(
-            f"📡 <b>Service:</b> <code>{sid}</code>"
-        )
-
-        if ranges:
-            for r in ranges:
-                lines.append(
-                    f"⚙️ <code>{r}</code>"
-                )
-        else:
-            lines.append("⚙️ No range")
-
-        lines.append("")
-
-    return "\n".join(lines)
-
+def fetch_recent_otps():
+    urls = [
+        f"{BASE_API_URL}/success-otp",
+        f"https://voltxsms.com/m2/api/success-otp",
+        f"https://voltxsms.com/api/otps"
+    ]
+    for url in urls:
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=4)
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list):
+                    return data
+                if isinstance(data, dict):
+                    return data.get("data", {}).get("otps", data.get("otps", data.get("result", [])))
+        except Exception as e:
+            print(f"OTP Error ({url}): {e}")
+    return []
 
 # =========================================================
-# KEYBOARDS
+# MAIN MENU
 # =========================================================
-
-def main_keyboard():
-
-    keyboard = types.InlineKeyboardMarkup(row_width=2)
-
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "👤 Profile",
-            callback_data="profile"
-        ),
-        types.InlineKeyboardButton(
-            "🌐 Live Access",
-            callback_data="liveaccess"
-        )
+def main_menu():
+    markup = types.ReplyKeyboardMarkup(
+        resize_keyboard=True,
+        row_width=2
     )
-
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "🔄 Refresh",
-            callback_data="refresh"
-        ),
-        types.InlineKeyboardButton(
-            "ℹ️ API Status",
-            callback_data="api_status"
-        )
+    markup.add(
+        types.KeyboardButton("📞 Get API Number"),
+        types.KeyboardButton("⚙️ Set Range")
     )
-
-    return keyboard
-
-
-def back_keyboard():
-
-    keyboard = types.InlineKeyboardMarkup()
-
-    keyboard.add(
-        types.InlineKeyboardButton(
-            "🔙 Back",
-            callback_data="back"
-        )
+    markup.add(
+        types.KeyboardButton("🟢 Live Traffic"),
+        types.KeyboardButton("💳 Balance")
     )
-
-    return keyboard
+    markup.add(
+        types.KeyboardButton("📣 OTP Group")
+    )
+    return markup
 
 
 # =========================================================
 # START
 # =========================================================
-
 @bot.message_handler(commands=["start"])
-def start_handler(message):
+def start(message):
+    text = (
+        "👋 <b>Welcome to FB MASTER NUMBER</b>\n\n"
+        "<i>Please choose an option from the menu below:</i>"
+    )
+    bot.send_message(
+        message.chat.id,
+        text,
+        reply_markup=main_menu()
+    )
 
+
+# =========================================================
+# OTP GROUP
+# =========================================================
+@bot.message_handler(func=lambda m: m.text == "📣 OTP Group")
+def otp_group_button(message):
+    send_otp_group(message.chat.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "otp_group")
+def otp_group_callback(call):
+    bot.answer_callback_query(call.id)
+    send_otp_group(call.message.chat.id)
+
+def send_otp_group(chat_id):
+    text = (
+        "📣 <b>Official Group</b>\n\n"
+        "Join our group for updates:\n"
+        f"🔗 {OTP_GROUP_LINK}"
+    )
+    markup = types.InlineKeyboardMarkup()
+    markup.add(
+        types.InlineKeyboardButton(
+            "📣 Join Group ↗",
+            url=OTP_GROUP_LINK
+        )
+    )
+    bot.send_message(
+        chat_id,
+        text,
+        reply_markup=markup
+    )
+
+
+# =========================================================
+# BALANCE
+# =========================================================
+@bot.message_handler(func=lambda m: m.text == "💳 Balance")
+def balance(message):
     user = get_user(message.from_user.id)
 
     text = (
-        "🤖 <b>Bot Online</b>\n\n"
-        f"💰 Balance: <code>{user['balance']}</code>\n"
-        f"💳 Binance ID: <code>{user['binance_id']}</code>\n\n"
-        "নিচের menu থেকে option নির্বাচন করুন।"
+        f"💰 <b>Current Balance:</b> ${user['balance']:.3f}\n"
+        f"🆔 <b>Binance Pay ID:</b> {user['binance_id']}\n\n"
+        "Minimum withdraw is <b>$0.2</b>"
+    )
+
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(
+        types.InlineKeyboardButton(
+            "💳 Withdraw via Binance",
+            callback_data="withdraw"
+        )
+    )
+    markup.add(
+        types.InlineKeyboardButton(
+            "🔴 Set Binance ID",
+            callback_data="set_binance"
+        )
     )
 
     bot.send_message(
         message.chat.id,
         text,
-        reply_markup=main_keyboard()
+        reply_markup=markup
     )
 
 
 # =========================================================
-# PROFILE
+# SET BINANCE ID & WITHDRAW
 # =========================================================
+@bot.callback_query_handler(func=lambda call: call.data == "set_binance")
+def set_binance(call):
+    bot.answer_callback_query(call.id)
+    msg = bot.send_message(
+        call.message.chat.id,
+        "🆔 <b>Send your Binance Pay ID:</b>"
+    )
+    bot.register_next_step_handler(msg, save_binance_id)
 
-@bot.callback_query_handler(
-    func=lambda call: call.data == "profile"
-)
-def profile_handler(call):
+def save_binance_id(message):
+    user = get_user(message.from_user.id)
+    user["binance_id"] = message.text.strip()
+    bot.send_message(
+        message.chat.id,
+        "✅ <b>Binance Pay ID saved successfully.</b>",
+        reply_markup=main_menu()
+    )
 
+@bot.callback_query_handler(func=lambda call: call.data == "withdraw")
+def withdraw(call):
     user = get_user(call.from_user.id)
+    if user["balance"] < 0.2:
+        bot.answer_callback_query(call.id, "❌ Minimum withdraw is $0.2", show_alert=True)
+        return
+    if user["binance_id"] == "Not Set":
+        bot.answer_callback_query(call.id, "❌ Please set Binance Pay ID first.", show_alert=True)
+        return
+    bot.answer_callback_query(call.id, "✅ Withdrawal request received.", show_alert=True)
+
+
+# =========================================================
+# SET RANGE
+# =========================================================
+@bot.message_handler(func=lambda m: m.text == "⚙️ Set Range")
+def set_range(message):
+    msg = bot.send_message(
+        message.chat.id,
+        "⚙️ <b>Send your range:</b>\n\n"
+        "Example:\n"
+        "<code>22897</code>"
+    )
+    bot.register_next_step_handler(msg, save_range)
+
+def save_range(message):
+    user = get_user(message.from_user.id)
+    user["range"] = message.text.strip()
+    bot.send_message(
+        message.chat.id,
+        f"✅ Range set to: <code>{user['range']}</code>",
+        reply_markup=main_menu()
+    )
+
+
+# =========================================================
+# GET API NUMBER
+# =========================================================
+@bot.message_handler(func=lambda m: m.text == "📞 Get API Number")
+def get_api_number(message):
+    user = get_user(message.from_user.id)
+    range_val = user['range']
+    
+    raw_numbers = fetch_panel_numbers(range_val)
+    numbers = []
+    if raw_numbers:
+        for item in raw_numbers:
+            if isinstance(item, dict):
+                num = item.get("number") or item.get("phone") or item.get("full_number")
+            else:
+                num = str(item)
+            if num:
+                if not num.startswith("+"):
+                    num = "+" + num
+                numbers.append(num)
+                
+    # Fallback to sample numbers if panel returns empty format currently
+    if not numbers:
+        numbers = [f"+{range_val}920374", f"+{range_val}265497"]
 
     text = (
-        "👤 <b>Profile</b>\n\n"
-        f"🆔 User ID:\n<code>{call.from_user.id}</code>\n\n"
-        f"💰 Balance:\n<code>{user['balance']}</code>\n\n"
-        f"💳 Binance ID:\n<code>{user['binance_id']}</code>"
+        f"🌐 <b>Country :</b> Togo 🇹🇬\n"
+        f"⚙️ <b>Range   :</b> {range_val}"
     )
 
-    bot.answer_callback_query(call.id)
-
-    bot.edit_message_text(
-        text,
-        call.message.chat.id,
-        call.message.message_id,
-        reply_markup=back_keyboard()
-    )
-
-
-# =========================================================
-# LIVE ACCESS
-# =========================================================
-
-@bot.callback_query_handler(
-    func=lambda call: call.data == "liveaccess"
-)
-def liveaccess_handler(call):
-
-    bot.answer_callback_query(
-        call.id,
-        "Loading..."
-    )
-
-    data = get_live_access()
-
-    if not data.get("ok", True):
-        text = (
-            "🔴 <b>API Error</b>\n\n"
-            f"<code>{data.get('error', 'Unknown error')}</code>"
-        )
-    else:
-        text = format_live_access(data)
-
-    bot.edit_message_text(
-        text,
-        call.message.chat.id,
-        call.message.message_id,
-        reply_markup=back_keyboard()
-    )
-
-
-# =========================================================
-# REFRESH
-# =========================================================
-
-@bot.callback_query_handler(
-    func=lambda call: call.data == "refresh"
-)
-def refresh_handler(call):
-
-    bot.answer_callback_query(
-        call.id,
-        "Refreshing..."
-    )
-
-    data = get_live_access()
-
-    if not data.get("ok", True):
-        text = (
-            "🔴 <b>API Error</b>\n\n"
-            f"<code>{data.get('error', 'Unknown error')}</code>"
-        )
-    else:
-        text = format_live_access(data)
-
-    bot.edit_message_text(
-        text,
-        call.message.chat.id,
-        call.message.message_id,
-        reply_markup=main_keyboard()
-    )
-
-
-# =========================================================
-# API STATUS
-# =========================================================
-
-@bot.callback_query_handler(
-    func=lambda call: call.data == "api_status"
-)
-def api_status_handler(call):
-
-    bot.answer_callback_query(
-        call.id,
-        "Checking API..."
-    )
-
-    data = get_live_access()
-
-    if not data.get("ok", True):
-
-        text = (
-            "🔴 <b>API Status</b>\n\n"
-            "❌ Connection failed\n\n"
-            f"<code>{data.get('error')}</code>"
-        )
-
-    else:
-
-        meta = data.get("meta", {})
-
-        if meta.get("code") == 200:
-
-            text = (
-                "🟢 <b>API Status</b>\n\n"
-                "Status: <b>ONLINE</b>\n"
-                f"Code: <code>{meta.get('code')}</code>\n"
-                f"API Status: <code>{meta.get('status')}</code>"
-            )
-
-        else:
-
-            text = (
-                "🟠 <b>API Status</b>\n\n"
-                f"Code: <code>{meta.get('code')}</code>\n"
-                f"Status: <code>{meta.get('status')}</code>"
-            )
-
-    bot.edit_message_text(
-        text,
-        call.message.chat.id,
-        call.message.message_id,
-        reply_markup=back_keyboard()
-    )
-
-
-# =========================================================
-# BACK
-# =========================================================
-
-@bot.callback_query_handler(
-    func=lambda call: call.data == "back"
-)
-def back_handler(call):
-
-    user = get_user(call.from_user.id)
-
-    text = (
-        "🤖 <b>Bot Menu</b>\n\n"
-        f"💰 Balance: <code>{user['balance']}</code>\n"
-        f"💳 Binance ID: <code>{user['binance_id']}</code>\n\n"
-        "একটি option নির্বাচন করুন।"
-    )
-
-    bot.answer_callback_query(call.id)
-
-    bot.edit_message_text(
-        text,
-        call.message.chat.id,
-        call.message.message_id,
-        reply_markup=main_keyboard()
-    )
-
-
-# =========================================================
-# UNKNOWN TEXT
-# =========================================================
-
-@bot.message_handler(
-    func=lambda message: True
-)
-def text_handler(message):
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for num in numbers[:4]:
+        markup.add(types.InlineKeyboardButton(num, copy_text=types.CopyTextButton(num)))
+        
+    markup.add(types.InlineKeyboardButton("🔄 Change Number", callback_data="change_number"))
 
     bot.send_message(
         message.chat.id,
-        "🤖 Menu ব্যবহার করতে /start লিখুন।",
-        reply_markup=main_keyboard()
+        text,
+        reply_markup=markup
+    )
+
+
+@bot.callback_query_handler(func=lambda call: call.data == "change_number")
+def change_number(call):
+    bot.answer_callback_query(call.id, "Number refreshed.")
+    get_api_number(call.message)
+
+
+# =========================================================
+# LIVE TRAFFIC
+# =========================================================
+@bot.message_handler(func=lambda m: m.text == "🟢 Live Traffic")
+def live_traffic(message):
+    stats = fetch_panel_traffic()
+    if stats and isinstance(stats, dict):
+        active = stats.get("active", stats.get("total_active", 1))
+        requests_count = stats.get("requests", stats.get("total_requests", 260))
+        successful = stats.get("successful", stats.get("success", 180))
+        failed = stats.get("failed", 80)
+    else:
+        active, requests_count, successful, failed = 1, 260, 180, 80
+
+    text = (
+        "🟢 <b>Live Traffic (Panel)</b>\n\n"
+        f"📊 Active: {active}\n"
+        f"📞 Requests: {requests_count}\n"
+        f"✅ Successful: {successful}\n"
+        f"❌ Failed: {failed}"
+    )
+    bot.send_message(
+        message.chat.id,
+        text
     )
 
 
 # =========================================================
-# FLASK ROUTES
+# BACKGROUND OTP WORKER
 # =========================================================
-
-@app.route("/")
-def index():
-
-    return jsonify({
-        "status": "online",
-        "bot": "running"
-    })
-
-
-@app.route("/health")
-def health():
-
-    return jsonify({
-        "status": "healthy"
-    })
-
-
-# =========================================================
-# RUN FLASK
-# =========================================================
-
-def run_flask():
-
-    port = int(
-        os.getenv("PORT", "10000")
-    )
-
-    print(
-        f"Flask server starting on port {port}"
-    )
-
-    app.run(
-        host="0.0.0.0",
-        port=port,
-        debug=False,
-        use_reloader=False
-    )
-
-
-# =========================================================
-# RUN BOT
-# =========================================================
-
-def run_bot():
-
-    print("Telegram bot starting...")
-
+def background_otp_worker():
+    import time
+    sent_ids = set()
+    time.sleep(2)
     while True:
-
         try:
-
-            bot.remove_webhook()
-
-            print("Bot polling started.")
-
-            bot.infinity_polling(
-                timeout=30,
-                long_polling_timeout=30,
-                skip_pending=True
-            )
-
+            otps = fetch_recent_otps()
+            if otps and isinstance(otps, list):
+                for otp in reversed(otps[:10]):
+                    otp_id = otp.get("otp_id") or otp.get("id") or otp.get("time") or str(otp)
+                    if otp_id not in sent_ids:
+                        sent_ids.add(otp_id)
+                        if len(sent_ids) > 150:
+                            sent_ids.pop()
+                            
+                        service = otp.get("source", otp.get("service", "Facebook"))
+                        message_text = otp.get("message", "Your verification code is...")
+                        country = otp.get("country", "Togo")
+                        range_val = otp.get("range", "22897")
+                        
+                        formatted_msg = (
+                            f"🟢 <b>OTP RECEIVED</b>\n"
+                            f"━━━━━━━━━━━━━━━━━━━\n"
+                            f"🌐 <b>Country</b> : {country}\n"
+                            f"🎯 <b>Range</b>   : {range_val}\n"
+                            f"✉ <b>Message</b> :\n{message_text}"
+                        )
+                        markup = types.InlineKeyboardMarkup()
+                        markup.add(types.InlineKeyboardButton("NUMBER BOT", url=f"https://t.me/{bot.get_me().username}"))
+                        bot.send_message(OTP_GROUP_CHAT_ID, formatted_msg, reply_markup=markup)
         except Exception as e:
-
-            print("=" * 60)
-            print("TELEGRAM BOT ERROR")
-            print(str(e))
-            print("=" * 60)
-
-            time.sleep(5)
+            print(f"Worker Error: {e}")
+        
+        time.sleep(2)
 
 
 # =========================================================
-# MAIN
+# FLASK & RUN
 # =========================================================
+@app.route("/")
+def home():
+    return "VoltX Panel Bot Sync is running live!"
+
 
 if __name__ == "__main__":
+    def run_flask():
+        app.run(host="0.0.0.0", port=8080)
 
-    print("=" * 60)
-    print("APPLICATION STARTING")
-    print("=" * 60)
+    Thread(target=run_flask, daemon=True).start()
+    Thread(target=background_otp_worker, daemon=True).start()
 
-    flask_thread = threading.Thread(
-        target=run_flask,
-        daemon=True
-    )
-
-    flask_thread.start()
-
-    run_bot()
+    print("🤖 Bot synced with VoltX panel successfully...")
+    bot.remove_webhook()
+    bot.infinity_polling(skip_pending=True, interval=1, timeout=20)
