@@ -183,7 +183,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
-        USER_STATES[user_id] = None
+        USER_STATES[smm_otp_grup] = None
 
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
         clean_text = text.strip()
@@ -242,7 +242,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         balance_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw_binance")],
             [InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
-            [InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
+            [InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{smm_otp_grup}")]
         ])
         await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
 
