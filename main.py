@@ -97,10 +97,20 @@ def _sync_check_voltx_otp(target_phone, order_id, order_time):
             if isinstance(hits, list):
                 for hit in hits:
                     if not isinstance(hit, dict): continue
+                    
+                    # 20 minutes (1200 seconds) er beshi puraton hit ignore korbe
+                    hit_time = hit.get("time") or hit.get("timestamp") or 0
+                    try:
+                        hit_time = float(hit_time)
+                        if hit_time > 1000000000 and hit_time < order_time:
+                            continue # Order neyar ager hit
+                    except:
+                        pass
+
                     num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
-                    # STRICT CHECK: Shudhu matro exact oi number-tai match korte hobe
+                    # Exact number match check
                     if not clean_target or not clean_num or clean_target != clean_num:
                         if not (clean_target.endswith(clean_num) or clean_num.endswith(clean_target)):
                             continue
@@ -124,6 +134,13 @@ async def auto_forward_console_logs(application):
     await asyncio.sleep(5)
     while True:
         try:
+            current_time_loop = time.time()
+            
+            # Puraton active orders (20 minutes ba 1200 seconds par hoye geche) remove kore dibo
+            for ap, data in list(ACTIVE_ORDERS.items()):
+                if current_time_loop - data[2] > 1200:
+                    ACTIVE_ORDERS.pop(ap, None)
+
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
             def fetch_console():
                 try:
@@ -163,7 +180,12 @@ async def auto_forward_console_logs(application):
                 
                 clean_hit_num = ''.join(filter(str.isdigit, str(num)))
                 
+                # Check active orders with strict 20 minutes time window
                 for active_phone, (user_chat_id, full_real_number, order_time) in list(ACTIVE_ORDERS.items()):
+                    # Jodi 20 minutes (1200s) beshi hoye thake, skip
+                    if time.time() - order_time > 1200:
+                        continue
+                        
                     clean_active = ''.join(filter(str.isdigit, str(active_phone)))
                     if clean_active and clean_hit_num:
                         if clean_active == clean_hit_num or clean_active.endswith(clean_hit_num) or clean_hit_num.endswith(clean_active):
@@ -227,8 +249,14 @@ def create_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, order_time, context):
-    for _ in range(300): 
+    # 20 minutes (1200 seconds) porjonto প্রতি সেকেন্ডে চেক করবে
+    for _ in range(1200): 
         await asyncio.sleep(1) 
+        
+        # Jodi 20 minutes periye jay, loop theke ber hoye jabe
+        if time.time() - order_time > 1200:
+            break
+            
         try:
             status = await check_voltx_otp(phone, order_id, order_time)
             if status:
