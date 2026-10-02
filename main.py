@@ -98,12 +98,18 @@ def _sync_check_voltx_otp(target_phone, order_id, order_time):
                 for hit in hits:
                     if not isinstance(hit, dict): continue
                     num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
-                    msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", ""))
+                    msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", "")).strip()
                     
-                    # যদি মেসেজ ফাকা থাকে বা PENDING হয়, তবে স্কিপ করো
-                    if not msg or msg.lower() in ["none", "null", "pending", ""]:
+                    # STRICT CHECK: যদি মেসেজ ফাকা থাকে বা pending/none হয় তবে সরাসরি বাদ দাও
+                    if not msg or msg.lower() in ["none", "null", "pending", "", "false"]:
                         continue
                         
+                    # মেসেজের ভেতর সত্যিকারের OTP বা কোড আছে কি না তা যাচাই করার জন্য কন্ডিশন
+                    # শুধুমাত্র সংখ্যাসুলভ বা কোড সদৃশ টেক্সট থাকলে তবেই গ্রহণ করবে
+                    clean_msg_check = ''.join(filter(str.isdigit, msg))
+                    if len(clean_msg_check) < 4:  # যদি কোড ৪ ডিজিটের কম হয় তবে সেটি ভ্যালিড ওটিপি নয়
+                        continue
+
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
                     matched = False
@@ -149,11 +155,15 @@ async def auto_forward_console_logs(application):
                     hit.get("mobile") or 
                     hit.get("range", "N/A")
                 )
-                msg = hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "")
+                msg = str(hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "")).strip()
                 sid = hit.get("sid", "FACEBOOK")
                 
-                # যদি মেসেজ না থাকে (PENDING অবস্হায় থাকে) তবে গ্রুপে বা বটে ফরওয়ার্ড হবে না
-                if not msg or str(msg).lower() in ["none", "null", "pending", ""]:
+                # STRICT CHECK: ফাকা বা pending মেসেজ কখনোই প্রসেস বা ফরওয়ার্ড করা যাবে না
+                if not msg or msg.lower() in ["none", "null", "pending", "", "false"]:
+                    continue
+
+                clean_msg_check = ''.join(filter(str.isdigit, msg))
+                if len(clean_msg_check) < 4:
                     continue
 
                 unique_id = str(hit.get("id") or hit.get("time") or f"{num}_{msg}")
@@ -170,18 +180,18 @@ async def auto_forward_console_logs(application):
                     clean_active = ''.join(filter(str.isdigit, str(active_phone)))
                     if clean_active and clean_hit_num:
                         if clean_active == clean_hit_num or clean_active.endswith(clean_hit_num) or clean_hit_num.endswith(clean_active) or clean_active[-9:] in clean_hit_num or clean_hit_num[-9:] in clean_active:
-                            match = re.search(r'\b\d{4,8}\b', str(msg))
-                            otp_code = match.group(0) if match else msg
-                            
-                            target_send_number = full_real_number if len(str(full_real_number)) > 7 else num
-                            
-                            otp_message = f"✅ <b>OTP Received!</b>\n\n📱 <b>Number:</b> <code>{target_send_number}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
-                            try:
-                                await application.bot.send_message(chat_id=user_chat_id, text=otp_message, parse_mode="HTML")
-                            except Exception as send_err:
-                                print(f"Direct User Send Error: {send_err}")
-                            ACTIVE_ORDERS.pop(active_phone, None)
-                            break
+                            match = re.search(r'\b\d{4,8}\b', msg)
+                            if match:
+                                otp_code = match.group(0)
+                                target_send_number = full_real_number if len(str(full_real_number)) > 7 else num
+                                
+                                otp_message = f"✅ <b>OTP Received!</b>\n\n📱 <b>Number:</b> <code>{target_send_number}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
+                                try:
+                                    await application.bot.send_message(chat_id=user_chat_id, text=otp_message, parse_mode="HTML")
+                                except Exception as send_err:
+                                    print(f"Direct User Send Error: {send_err}")
+                                ACTIVE_ORDERS.pop(active_phone, None)
+                                break
 
                 country_name, country_code, flag = get_country_info(str(num))
                 
@@ -375,7 +385,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception: pass
         await start(update, context)
     elif query.data == "set_binance":
-        await query.message.reply_text("Please send your Binance Pay ID:")
+        asyncio.create_task(query.message.reply_text("Please send your Binance Pay ID:"))
 
 async def post_init(application):
     asyncio.create_task(auto_forward_console_logs(application))
@@ -386,7 +396,7 @@ if __name__ == '__main__':
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
-    from http.server import HTTPServer, BaseHTTPRequestHandler
+    from http.server import HTTPServer
     import threading
 
     class SimpleHTTPRequestHandler(BaseHTTPRequestHandler):
