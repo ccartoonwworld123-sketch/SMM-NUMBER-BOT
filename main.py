@@ -15,7 +15,7 @@ OTP_GROUP_CHAT_ID = -1004436883235
 USER_STATES = {}
 USER_RANGES = {}
 SEEN_OTP_IDS = set()
-ACTIVE_ORDERS = {}  # Active user numbers track korar jonno
+ACTIVE_ORDERS = {}  # Active user numbers track korar jonno (chat_id, full_phone)
 
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
@@ -153,12 +153,12 @@ async def auto_forward_console_logs(application):
                 
                 clean_hit_num = ''.join(filter(str.isdigit, str(num)))
                 
-                # Active order match korle direct user ke pathiye dibe
-                for active_phone, user_chat_id in list(ACTIVE_ORDERS.items()):
+                # Active order match korle user ke full real number soho OTP pathabe
+                for active_phone, (user_chat_id, full_real_number) in list(ACTIVE_ORDERS.items()):
                     if active_phone in clean_hit_num or clean_hit_num in active_phone or active_phone[-8:] in clean_hit_num:
                         match = re.search(r'\b\d{4,8}\b', str(msg))
                         otp_code = match.group(0) if match else msg
-                        otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{num}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
+                        otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{full_real_number}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
                         try:
                             await application.bot.send_message(chat_id=user_chat_id, text=otp_message, parse_mode="HTML")
                         except Exception as send_err:
@@ -285,7 +285,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         for p, oid in orders:
             clean_p = ''.join(filter(str.isdigit, p))
-            ACTIVE_ORDERS[clean_p] = update.effective_chat.id
+            ACTIVE_ORDERS[clean_p] = (update.effective_chat.id, p)
             asyncio.create_task(poll_for_otp(update.effective_chat.id, oid, p, context))
 
     elif text == "⚙️ Set Range":
@@ -348,7 +348,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         for p, oid in orders:
             clean_p = ''.join(filter(str.isdigit, p))
-            ACTIVE_ORDERS[clean_p] = query.message.chat_id
+            ACTIVE_ORDERS[clean_p] = (query.message.chat_id, p)
             asyncio.create_task(poll_for_otp(query.message.chat_id, oid, p, context))
 
     elif query.data == "back_home":
