@@ -9,7 +9,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 VOLTX_API_KEY = "MNFO9XZGN7E"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
-YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
+YOUR_TELEGRAM_USERNAME = "Smmnumberbot"
 OTP_GROUP_CHAT_ID = -1004436883235
 
 USER_STATES = {}
@@ -143,9 +143,9 @@ async def auto_forward_console_logs(application):
                 
                 country_name, country_code, flag = get_country_info(str(num))
                 
-                # স্কিনশটের ডিজাইন অনুযায়ী মেসেজ ফরম্যাট
                 log_text = (
-                    f"<b>OTP</b>                         <b>Admin</b>\n"
+                    f"<b>SMM NUMBER PANEL</b>                         <b>Admin</b>\n"
+                    f"OTP                         Admin\n"
                     f"📘 <b>{sid} OTP RECEIVE</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
                     f"{flag} <b>Country :</b> {country_code}\n"
@@ -156,7 +156,6 @@ async def auto_forward_console_logs(application):
                     f"<code>{msg}</code>"
                 )
                 
-                # নিচে স্কিনশটের মতো বাটন যোগ করা
                 markup = InlineKeyboardMarkup([
                     [InlineKeyboardButton("NUMBER BOT ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
                 ])
