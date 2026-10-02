@@ -84,7 +84,29 @@ def _sync_fetch_live_traffic():
 async def fetch_live_traffic_from_panel():
     return await asyncio.to_thread(_sync_fetch_live_traffic)
 
-def _sync_check_voltx_otp(target_phone, order_id):
+def _get_existing_hit_ids(target_phone):
+    headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
+    clean_target = ''.join(filter(str.isdigit, str(target_phone)))
+    ignored = set()
+    try:
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
+        if res.status_code == 200:
+            res_json = res.json()
+            hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
+            if isinstance(hits, list):
+                for hit in hits:
+                    if not isinstance(hit, dict): continue
+                    hit_id = str(hit.get("id", ""))
+                    num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", ""))
+                    clean_num = ''.join(filter(str.isdigit, num_raw))
+                    if clean_target and clean_num and (clean_target in clean_num or clean_num in clean_target or clean_target[-8:] in clean_num):
+                        if hit_id:
+                            ignored.add(hit_id)
+    except Exception as e:
+        print(f"Get Existing Hits Error: {e}")
+    return ignored
+
+def _sync_check_voltx_otp(target_phone, order_id, ignored_ids):
     headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
     clean_target = ''.join(filter(str.isdigit, str(target_phone)))
     
@@ -96,9 +118,14 @@ def _sync_check_voltx_otp(target_phone, order_id):
             if isinstance(hits, list):
                 for hit in hits:
                     if not isinstance(hit, dict): continue
+                    hit_id = str(hit.get("id", ""))
+                    
+                    # Number neyar ager purono hit gulo bad diye debe
+                    if hit_id in ignored_ids:
+                        continue
+                        
                     num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
                     msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", ""))
-                    hit_id = str(hit.get("id", ""))
                     
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
@@ -118,8 +145,8 @@ def _sync_check_voltx_otp(target_phone, order_id):
         print(f"Console Check Error: {e}")
     return None
 
-async def check_voltx_otp(target_phone, order_id):
-    return await asyncio.to_thread(_sync_check_voltx_otp, target_phone, order_id)
+async def check_voltx_otp(target_phone, order_id, ignored_ids):
+    return await asyncio.to_thread(_sync_check_voltx_otp, target_phone, order_id, ignored_ids)
 
 async def auto_forward_console_logs(application):
     await asyncio.sleep(5)
@@ -224,10 +251,13 @@ def create_number_markup(numbers_list):
     return InlineKeyboardMarkup(keyboard)
 
 async def poll_for_otp(chat_id, order_id, phone, context):
+    # Number neyar muhurte ager sob purono hit id gulo record kore bad dewa hocche
+    ignored_ids = await asyncio.to_thread(_get_existing_hit_ids, phone)
+    
     for _ in range(300): 
         await asyncio.sleep(1) 
         try:
-            status = await check_voltx_otp(phone, order_id)
+            status = await check_voltx_otp(phone, order_id, ignored_ids)
             if status:
                 otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{phone}</code>\n🔑 <b>OTP Code:</b> <code>{status}</code>"
                 await context.bot.send_message(
