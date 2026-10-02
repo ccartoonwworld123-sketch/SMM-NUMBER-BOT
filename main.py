@@ -162,7 +162,7 @@ async def auto_forward_console_logs(application):
                     f"🎯 <b>Range :</b> <code>{num}</code>\n"
                     f"🗣 <b>Language :</b> English\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"✉️ <b>Message :</b>\n"
+                    f"✉️️ <b>Message :</b>\n"
                     f"<code>{msg}</code>"
                 )
                 
@@ -271,7 +271,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "⚙️ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
-        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
+        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896 or 2289657):")
 
     elif text == "🟢 Live Traffic":
         sorted_ranges, total_hits = await fetch_live_traffic_from_panel()
