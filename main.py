@@ -147,18 +147,29 @@ async def auto_forward_console_logs(application):
                 if len(SEEN_OTP_IDS) > 500:
                     SEEN_OTP_IDS.clear()
 
-                num = hit.get("number") or hit.get("phone") or hit.get("full_number") or hit.get("range", "N/A")
+                num = (
+                    hit.get("full_number") or 
+                    hit.get("national_number") or 
+                    hit.get("phone") or 
+                    hit.get("number") or 
+                    hit.get("receiver") or 
+                    hit.get("mobile") or 
+                    hit.get("range", "N/A")
+                )
                 msg = hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "N/A")
                 sid = hit.get("sid", "FACEBOOK")
                 
                 clean_hit_num = ''.join(filter(str.isdigit, str(num)))
                 
-                # Active order match korle user ke full real number soho OTP pathabe
                 for active_phone, (user_chat_id, full_real_number) in list(ACTIVE_ORDERS.items()):
-                    if active_phone in clean_hit_num or clean_hit_num in active_phone or active_phone[-8:] in clean_hit_num:
+                    clean_active = ''.join(filter(str.isdigit, str(active_phone)))
+                    if clean_active and clean_hit_num and (clean_active in clean_hit_num or clean_hit_num in clean_active or clean_active[-8:] == clean_hit_num[-8:]):
                         match = re.search(r'\b\d{4,8}\b', str(msg))
                         otp_code = match.group(0) if match else msg
-                        otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{full_real_number}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
+                        
+                        target_send_number = full_real_number if len(str(full_real_number)) > 7 else num
+                        
+                        otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{target_send_number}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
                         try:
                             await application.bot.send_message(chat_id=user_chat_id, text=otp_message, parse_mode="HTML")
                         except Exception as send_err:
