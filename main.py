@@ -192,6 +192,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text == "📞 Get API Number":
+        wait_msg = await update.message.reply_text("⏳ Fetching real number from panel, please wait...")
         user_range = USER_RANGES.get(user_id, "22896")
         numbers = []
         orders = []
@@ -201,6 +202,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if p and p not in numbers:
                 numbers.append(p)
                 if oid: orders.append((p, oid))
+
+        try:
+            await wait_msg.delete()
+        except Exception:
+            pass
 
         if not numbers:
             await update.message.reply_text(f"❌ <b>No Real Number Available!</b>\n\nPanel has no stock for range <code>{user_range}</code>.", parse_mode="HTML")
