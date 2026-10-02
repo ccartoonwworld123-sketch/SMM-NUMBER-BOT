@@ -106,12 +106,10 @@ def _sync_check_voltx_otp(target_phone, order_id, order_time):
                     matched = False
                     if order_id and hit_id and str(order_id) == hit_id:
                         matched = True
-                    elif clean_target and clean_num and (clean_target in clean_num or clean_num in clean_target or clean_target[-8:] in clean_num):
+                    elif clean_target and clean_num and (clean_target == clean_num or clean_target[-8:] == clean_num[-8:]):
                         matched = True
                         
                     if matched:
-                        # Check korbe je message ti number neyar por esheche kina (purono message skip korar jonno)
-                        # Jodi hit er moddhe time thake ba order_time er porer hoy
                         match = re.search(r'\b\d{4,8}\b', msg)
                         if match:
                             return match.group(0)
@@ -166,8 +164,7 @@ async def auto_forward_console_logs(application):
                 
                 for active_phone, (user_chat_id, full_real_number, order_time) in list(ACTIVE_ORDERS.items()):
                     clean_active = ''.join(filter(str.isdigit, str(active_phone)))
-                    if clean_active and clean_hit_num and (clean_active in clean_hit_num or clean_hit_num in clean_active or clean_active[-8:] == clean_hit_num[-8:]):
-                        # Shudhu matro number neyar porer (order_time er porer) message-kei allow korbe
+                    if clean_active and clean_hit_num and (clean_active == clean_hit_num or clean_active[-8:] == clean_hit_num[-8:]):
                         match = re.search(r'\b\d{4,8}\b', str(msg))
                         otp_code = match.group(0) if match else msg
                         
