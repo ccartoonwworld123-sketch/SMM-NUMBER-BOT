@@ -99,8 +99,11 @@ def _sync_check_voltx_otp(target_phone, order_id, order_time):
                     if not isinstance(hit, dict): continue
                     num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
                     msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", ""))
-                    hit_id = str(hit.get("id", ""))
                     
+                    # যদি মেসেজ ফাকা থাকে বা PENDING হয়, তবে স্কিপ করো
+                    if not msg or msg.lower() in ["none", "null", "pending", ""]:
+                        continue
+                        
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
                     matched = False
@@ -112,8 +115,6 @@ def _sync_check_voltx_otp(target_phone, order_id, order_time):
                         match = re.search(r'\b\d{4,8}\b', msg)
                         if match:
                             return match.group(0)
-                        elif msg:
-                            return msg
     except Exception as e:
         print(f"Console Check Error: {e}")
     return None
@@ -139,14 +140,6 @@ async def auto_forward_console_logs(application):
             for hit in hits:
                 if not isinstance(hit, dict): continue
                 
-                unique_id = str(hit.get("id") or hit.get("time") or hit.get("message") or hit.get("number"))
-                if unique_id in SEEN_OTP_IDS:
-                    continue
-                
-                SEEN_OTP_IDS.add(unique_id)
-                if len(SEEN_OTP_IDS) > 500:
-                    SEEN_OTP_IDS.clear()
-
                 num = (
                     hit.get("full_number") or 
                     hit.get("national_number") or 
@@ -156,8 +149,20 @@ async def auto_forward_console_logs(application):
                     hit.get("mobile") or 
                     hit.get("range", "N/A")
                 )
-                msg = hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "N/A")
+                msg = hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "")
                 sid = hit.get("sid", "FACEBOOK")
+                
+                # যদি মেসেজ না থাকে (PENDING অবস্হায় থাকে) তবে গ্রুপে বা বটে ফরওয়ার্ড হবে না
+                if not msg or str(msg).lower() in ["none", "null", "pending", ""]:
+                    continue
+
+                unique_id = str(hit.get("id") or hit.get("time") or f"{num}_{msg}")
+                if unique_id in SEEN_OTP_IDS:
+                    continue
+                
+                SEEN_OTP_IDS.add(unique_id)
+                if len(SEEN_OTP_IDS) > 500:
+                    SEEN_OTP_IDS.clear()
                 
                 clean_hit_num = ''.join(filter(str.isdigit, str(num)))
                 
@@ -189,7 +194,7 @@ async def auto_forward_console_logs(application):
                     f"🎯 <b>Range :</b> <code>{num}</code>\n"
                     f"🗣 <b>Language :</b> English\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"✉️️ <b>Message :</b>\n"
+                    f"✉️ <b>Message :</b>\n"
                     f"<code>{msg}</code>"
                 )
                 
@@ -255,10 +260,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if text in ["📞 Get API Number", "⚙ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
+    if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
         USER_STATES[user_id] = None
 
-    if USER_STATES.get(user_id) == "WAITING_FROM_RANGE" or USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
+    if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
         clean_text = text.strip()
         if "x" in clean_text.lower() or clean_text.isdigit():
             USER_STATES[user_id] = None
