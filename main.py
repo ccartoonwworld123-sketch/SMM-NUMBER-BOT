@@ -9,7 +9,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 VOLTX_API_KEY = "MNFO9XZGN7E"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
-YOUR_TELEGRAM_USERNAME = "smmsaport"
+YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
 
 USER_STATES = {}
 USER_RANGES = {}
@@ -18,7 +18,7 @@ def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
     if clean_num.startswith("237"): return "Cameroon", "CM", "🇨🇲"
     elif clean_num.startswith("225"): return "Ivory Coast", "CI", "🇨🇮"
-    elif clean_num.startswith("228"): return "Togo", "TG", "🇨🇮"
+    elif clean_num.startswith("228"): return "Togo", "TG", "🇹🇬"
     elif clean_num.startswith("229"): return "Benin", "BJ", "🇧🇯"
     elif clean_num.startswith("255"): return "Tanzania", "TZ", "🇹🇿"
     elif clean_num.startswith("266"): return "Lesotho", "LS", "🇱🇸"
