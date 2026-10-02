@@ -15,6 +15,7 @@ OTP_GROUP_CHAT_ID = -1004436883235
 USER_STATES = {}
 USER_RANGES = {}
 SEEN_OTP_IDS = set()
+ACTIVE_ORDERS = {}  # Active user numbers track korar jonno
 
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
@@ -77,7 +78,6 @@ def _sync_fetch_live_traffic():
                             range_counts[clean_r] = {"sid": str(sid).upper(), "count": 1}
     except Exception as e:
         print(f"Traffic Error: {e}")
-    
     sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1]["count"], reverse=True)
     return sorted_ranges, total_hits
 
@@ -87,7 +87,6 @@ async def fetch_live_traffic_from_panel():
 def _sync_check_voltx_otp(target_phone, order_id):
     headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
     clean_target = ''.join(filter(str.isdigit, str(target_phone)))
-    short_target = clean_target[-8:] if len(clean_target) >= 8 else clean_target
     
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
@@ -99,10 +98,17 @@ def _sync_check_voltx_otp(target_phone, order_id):
                     if not isinstance(hit, dict): continue
                     num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
                     msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", ""))
+                    hit_id = str(hit.get("id", ""))
                     
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
-                    if short_target in clean_num or clean_target in clean_num:
+                    matched = False
+                    if order_id and hit_id and str(order_id) == hit_id:
+                        matched = True
+                    elif clean_target and clean_num and (clean_target in clean_num or clean_num in clean_target or clean_target[-8:] in clean_num):
+                        matched = True
+                        
+                    if matched:
                         match = re.search(r'\b\d{4,8}\b', msg)
                         if match:
                             return match.group(0)
@@ -117,14 +123,8 @@ async def check_voltx_otp(target_phone, order_id):
 
 async def auto_forward_console_logs(application):
     await asyncio.sleep(5)
-    port = int(os.environ.get("PORT", 8080))
     while True:
         try:
-            try:
-                requests.get(f"http://127.0.0.1:{port}/", timeout=2)
-            except Exception:
-                pass
-
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
             def fetch_console():
                 try:
@@ -151,10 +151,25 @@ async def auto_forward_console_logs(application):
                 msg = hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "N/A")
                 sid = hit.get("sid", "FACEBOOK")
                 
+                clean_hit_num = ''.join(filter(str.isdigit, str(num)))
+                
+                # Active order match korle direct user ke pathiye dibe
+                for active_phone, user_chat_id in list(ACTIVE_ORDERS.items()):
+                    if active_phone in clean_hit_num or clean_hit_num in active_phone or active_phone[-8:] in clean_hit_num:
+                        match = re.search(r'\b\d{4,8}\b', str(msg))
+                        otp_code = match.group(0) if match else msg
+                        otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{num}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
+                        try:
+                            await application.bot.send_message(chat_id=user_chat_id, text=otp_message, parse_mode="HTML")
+                        except Exception as send_err:
+                            print(f"Direct User Send Error: {send_err}")
+                        ACTIVE_ORDERS.pop(active_phone, None)
+                        break
+
                 country_name, country_code, flag = get_country_info(str(num))
                 
                 log_text = (
-                    f"<b>SMM NUMBER PANEL</b>                         <b>Admin</b>\n"
+                    f"<b>SMM NUMBER PANEL</b>                        <b>Admin</b>\n"
                     f"OTP                         Admin\n"
                     f"📘 <b>{sid} OTP RECEIVE</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
@@ -209,6 +224,8 @@ async def poll_for_otp(chat_id, order_id, phone, context):
                     text=otp_message, 
                     parse_mode="HTML"
                 )
+                clean_p = ''.join(filter(str.isdigit, phone))
+                ACTIVE_ORDERS.pop(clean_p, None)
                 return
         except Exception as e:
             print(f"Polling Send Error: {e}")
@@ -226,7 +243,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if text in ["📞 Get API Number", "⚙️️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
+    if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
         USER_STATES[user_id] = None
 
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
@@ -236,12 +253,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             USER_RANGES[user_id] = clean_text
             await update.message.reply_text(f"🔴 Target range updated to: <b>{clean_text}</b>", parse_mode="HTML")
         else:
-            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 23762).")
+            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
         return
 
     if text == "📞 Get API Number":
         wait_msg = await update.message.reply_text("⏳ Fetching real number from panel, please wait...")
-        user_range = USER_RANGES.get(user_id, "23762")
+        user_range = USER_RANGES.get(user_id, "22896")
         numbers = []
         orders = []
 
@@ -267,11 +284,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
         
         for p, oid in orders:
+            clean_p = ''.join(filter(str.isdigit, p))
+            ACTIVE_ORDERS[clean_p] = update.effective_chat.id
             asyncio.create_task(poll_for_otp(update.effective_chat.id, oid, p, context))
 
     elif text == "⚙️ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
-        await update.message.reply_text("🔴 Please send your target number range (e.g. 23762 or 23762XXX):")
+        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
 
     elif text == "🟢 Live Traffic":
         sorted_ranges, total_hits = await fetch_live_traffic_from_panel()
@@ -308,7 +327,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "change_number":
         user_id = query.from_user.id
-        user_range = USER_RANGES.get(user_id, "23762")
+        user_range = USER_RANGES.get(user_id, "22896")
         numbers = []
         orders = []
 
@@ -328,6 +347,8 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception: pass
 
         for p, oid in orders:
+            clean_p = ''.join(filter(str.isdigit, p))
+            ACTIVE_ORDERS[clean_p] = query.message.chat_id
             asyncio.create_task(poll_for_otp(query.message.chat_id, oid, p, context))
 
     elif query.data == "back_home":
