@@ -39,7 +39,7 @@ def _sync_get_voltx_real_number(target_range):
     clean_rid = str(target_range).upper().replace("XXX", "").replace("X", "").strip()
     payload = {"rid": clean_rid}
     try:
-        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=3)
+        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=5)
         if res.status_code == 200:
             res_data = res.json()
             data = res_data.get("data", {})
@@ -59,7 +59,7 @@ def _sync_fetch_live_traffic():
     range_counts = {}
     total_hits = 0
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=5)
         if res.status_code == 200:
             res_json = res.json()
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
@@ -89,7 +89,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
         if res.status_code == 200:
             res_json = res.json()
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
@@ -120,9 +120,12 @@ async def auto_forward_console_logs(application):
         try:
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
             def fetch_console():
-                res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
-                if res.status_code == 200:
-                    return res.json().get("data", {}).get("hits", []) or []
+                try:
+                    res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=5)
+                    if res.status_code == 200:
+                        return res.json().get("data", {}).get("hits", []) or []
+                except Exception as ex:
+                    print(f"Inner Fetch Error: {ex}")
                 return []
 
             hits = await asyncio.to_thread(fetch_console)
@@ -160,12 +163,15 @@ async def auto_forward_console_logs(application):
                     [InlineKeyboardButton("NUMBER BOT ↗", url="https://t.me/Smmnumberbot")]
                 ])
                 
-                await application.bot.send_message(
-                    chat_id=OTP_GROUP_CHAT_ID,
-                    text=log_text,
-                    reply_markup=markup,
-                    parse_mode="HTML"
-                )
+                try:
+                    await application.bot.send_message(
+                        chat_id=OTP_GROUP_CHAT_ID,
+                        text=log_text,
+                        reply_markup=markup,
+                        parse_mode="HTML"
+                    )
+                except Exception as send_err:
+                    print(f"Telegram Send Error: {send_err}")
         except Exception as e:
             print(f"Auto Forward Error: {e}")
         
@@ -284,7 +290,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
 
     elif text == "📣 OTP Group":
-        await update.message.reply_text(f"📣 Join our OTP Group: https://t.me/{YOUR_TELEGRAM_USERNAME}")
+        group_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📣 Join OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
+        ])
+        await update.message.reply_text("📣 Click the button below to join our official OTP Group:", reply_markup=group_markup)
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -341,4 +350,3 @@ if __name__ == '__main__':
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
     app.run_polling()
-
