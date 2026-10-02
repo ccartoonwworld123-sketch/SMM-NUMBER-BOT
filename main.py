@@ -77,7 +77,6 @@ def _sync_fetch_live_traffic():
                             range_counts[clean_r] = {"sid": str(sid).upper(), "count": 1}
     except Exception as e:
         print(f"Traffic Error: {e}")
-    sorted_ranges = sorted(range_counts.items(), key=lambda x: x[1]["count"], reverse=True)
     return sorted_ranges, total_hits
 
 async def fetch_live_traffic_from_panel():
@@ -116,8 +115,15 @@ async def check_voltx_otp(target_phone, order_id):
 
 async def auto_forward_console_logs(application):
     await asyncio.sleep(5)
+    port = int(os.environ.get("PORT", 8080))
     while True:
         try:
+            # Self-ping to prevent hosting sleep/inactivity timeout
+            try:
+                requests.get(f"http://127.0.0.1:{port}/", timeout=2)
+            except Exception:
+                pass
+
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
             def fetch_console():
                 try:
