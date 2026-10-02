@@ -89,26 +89,27 @@ def _sync_check_voltx_otp(target_phone, order_id):
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
+        # Docs অনুযায়ী success-otp এন্ডপয়েন্ট ব্যবহার করা হলো যা আপনার সফল ওটিপির তালিকা দেয়[span_9](start_span)[span_9](end_span)[span_10](start_span)[span_10](end_span)[span_11](start_span)[span_11](end_span)
+        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=3)
         if res.status_code == 200:
             res_json = res.json()
-            hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
-            if isinstance(hits, list):
-                for hit in hits:
-                    if not isinstance(hit, dict): continue
-                    num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
-                    msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", ""))
+            otps = res_json.get("data", {}).get("otps", []) or []
+            if isinstance(otps, list):
+                for otp_item in otps:
+                    if not isinstance(otp_item, dict): continue
+                    num_raw = str(otp_item.get("number", ""))
+                    msg = str(otp_item.get("message", ""))
                     
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
-                    if short_target in clean_num or short_target in msg or (clean_target and clean_target in clean_num):
+                    if short_target in clean_num or (clean_target and clean_target in clean_num):
                         match = re.search(r'\b\d{4,8}\b', msg)
                         if match:
                             return match.group(0)
                         elif msg:
                             return msg
     except Exception as e:
-        print(f"Console Check Error: {e}")
+        print(f"OTP Check Error: {e}")
     return None
 
 async def check_voltx_otp(target_phone, order_id):
@@ -119,20 +120,20 @@ async def auto_forward_console_logs(application):
     while True:
         try:
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
-            def fetch_console():
+            def fetch_success_otps():
                 try:
-                    res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=5)
+                    res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=5)
                     if res.status_code == 200:
-                        return res.json().get("data", {}).get("hits", []) or []
+                        return res.json().get("data", {}).get("otps", []) or []
                 except Exception as ex:
-                    print(f"Inner Fetch Error: {ex}")
+                    print(f"Auto Forward Fetch Error: {ex}")
                 return []
 
-            hits = await asyncio.to_thread(fetch_console)
-            for hit in hits:
-                if not isinstance(hit, dict): continue
+            otps = await asyncio.to_thread(fetch_success_otps)
+            for otp_item in otps:
+                if not isinstance(otp_item, dict): continue
                 
-                unique_id = str(hit.get("id") or hit.get("time") or hit.get("message") or hit.get("number"))
+                unique_id = str(otp_item.get("otp_id") or otp_item.get("time") or otp_item.get("number"))
                 if unique_id in SEEN_OTP_IDS:
                     continue
                 
@@ -140,9 +141,9 @@ async def auto_forward_console_logs(application):
                 if len(SEEN_OTP_IDS) > 500:
                     SEEN_OTP_IDS.clear()
 
-                num = hit.get("number") or hit.get("phone") or hit.get("full_number") or hit.get("range", "N/A")
-                msg = hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "N/A")
-                sid = hit.get("sid", "FACEBOOK")
+                num = otp_item.get("number", "N/A")
+                msg = otp_item.get("message", "N/A")
+                sid = "FACEBOOK"
                 
                 country_name, country_code, flag = get_country_info(str(num))
                 
