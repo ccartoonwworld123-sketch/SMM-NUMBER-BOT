@@ -115,7 +115,7 @@ async def check_voltx_otp(target_phone, order_id):
     return await asyncio.to_thread(_sync_check_voltx_otp, target_phone, order_id)
 
 async def auto_forward_console_logs(application):
-    await asyncio.sleep(5) # Bot start howar 5 second por task shuru hobe
+    await asyncio.sleep(5)
     while True:
         try:
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
@@ -129,37 +129,48 @@ async def auto_forward_console_logs(application):
             for hit in hits:
                 if not isinstance(hit, dict): continue
                 
-                # Unique identifier তৈরি করা যাতে duplicate মেসেজ বারবার না যায়
                 unique_id = str(hit.get("id") or hit.get("time") or hit.get("message") or hit.get("number"))
                 if unique_id in SEEN_OTP_IDS:
                     continue
                 
                 SEEN_OTP_IDS.add(unique_id)
                 if len(SEEN_OTP_IDS) > 500:
-                    SEEN_OTP_IDS.clear() # Memory limit maintain korar jonno
+                    SEEN_OTP_IDS.clear()
 
                 num = hit.get("number") or hit.get("phone") or hit.get("full_number") or hit.get("range", "N/A")
                 msg = hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "N/A")
                 sid = hit.get("sid", "FACEBOOK")
                 
-                _, _, flag = get_country_info(str(num))
+                country_name, country_code, flag = get_country_info(str(num))
                 
+                # স্কিনশটের ডিজাইন অনুযায়ী মেসেজ ফরম্যাট
                 log_text = (
-                    f"🔔 <b>NEW CONSOLE LOG / OTP</b>\n\n"
-                    f"🌐 <b>Service:</b> {sid}\n"
-                    f"📱 <b>Number/Range:</b> {flag} <code>{num}</code>\n"
-                    f"💬 <b>Message:</b> <code>{msg}</code>"
+                    f"<b>OTP</b>                         <b>Admin</b>\n"
+                    f"📘 <b>{sid} OTP RECEIVE</b>\n"
+                    f"━━━━━━━━━━━━━━━━━━━\n"
+                    f"{flag} <b>Country :</b> {country_code}\n"
+                    f"🎯 <b>Range :</b> <code>{num}</code>\n"
+                    f"🗣 <b>Language :</b> English\n"
+                    f"━━━━━━━━━━━━━━━━━━━\n"
+                    f"✉️ <b>Message :</b>\n"
+                    f"<code>{msg}</code>"
                 )
+                
+                # নিচে স্কিনশটের মতো বাটন যোগ করা
+                markup = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("NUMBER BOT ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
+                ])
                 
                 await application.bot.send_message(
                     chat_id=OTP_GROUP_CHAT_ID,
                     text=log_text,
+                    reply_markup=markup,
                     parse_mode="HTML"
                 )
         except Exception as e:
             print(f"Auto Forward Error: {e}")
         
-        await asyncio.sleep(3) # Prottek 3 second por por console check korbe
+        await asyncio.sleep(3)
 
 def create_number_markup(numbers_list):
     keyboard = []
@@ -312,7 +323,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Please send your Binance Pay ID:")
 
 async def post_init(application):
-    # বট চালু হওয়ার সাথে সাথে অটো-ফরওয়ার্ড ব্যাকগ্রাউন্ড টাস্ক চালু হবে
     asyncio.create_task(auto_forward_console_logs(application))
 
 if __name__ == '__main__':
