@@ -10,9 +10,11 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 VOLTX_API_KEY = "MNFO9XZGN7E"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
 YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
+OTP_GROUP_CHAT_ID = -1004436883235
 
 USER_STATES = {}
 USER_RANGES = {}
+SEEN_OTP_IDS = set()
 
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
@@ -107,34 +109,57 @@ def _sync_check_voltx_otp(target_phone, order_id):
                             return msg
     except Exception as e:
         print(f"Console Check Error: {e}")
-
-    try:
-        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
-        if res.status_code == 200:
-            res_json = res.json()
-            otps = res_json.get("data", {}).get("otps", []) or res_json.get("data", []) or res_json.get("otps", [])
-            if isinstance(otps, list):
-                for item in otps:
-                    if not isinstance(item, dict): continue
-                    num_raw = str(item.get("number", "") or item.get("phone", "") or item.get("full_number", "") or item.get("receiver", ""))
-                    oid = str(item.get("otp_id", "") or item.get("id", "") or item.get("order_id", ""))
-                    msg = str(item.get("message", "") or item.get("sms", "") or item.get("text", "") or item.get("content", "") or item.get("otp", ""))
-                    
-                    clean_num = ''.join(filter(str.isdigit, num_raw))
-                    
-                    if short_target in clean_num or short_target in msg or (order_id and str(order_id) in oid):
-                        match = re.search(r'\b\d{4,8}\b', msg)
-                        if match:
-                            return match.group(0)
-                        elif msg:
-                            return msg
-    except Exception as e:
-        print(f"Success-OTP Error: {e}")
-        
     return None
 
 async def check_voltx_otp(target_phone, order_id):
     return await asyncio.to_thread(_sync_check_voltx_otp, target_phone, order_id)
+
+async def auto_forward_console_logs(application):
+    await asyncio.sleep(5) # Bot start howar 5 second por task shuru hobe
+    while True:
+        try:
+            headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
+            def fetch_console():
+                res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
+                if res.status_code == 200:
+                    return res.json().get("data", {}).get("hits", []) or []
+                return []
+
+            hits = await asyncio.to_thread(fetch_console)
+            for hit in hits:
+                if not isinstance(hit, dict): continue
+                
+                # Unique identifier তৈরি করা যাতে duplicate মেসেজ বারবার না যায়
+                unique_id = str(hit.get("id") or hit.get("time") or hit.get("message") or hit.get("number"))
+                if unique_id in SEEN_OTP_IDS:
+                    continue
+                
+                SEEN_OTP_IDS.add(unique_id)
+                if len(SEEN_OTP_IDS) > 500:
+                    SEEN_OTP_IDS.clear() # Memory limit maintain korar jonno
+
+                num = hit.get("number") or hit.get("phone") or hit.get("full_number") or hit.get("range", "N/A")
+                msg = hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "N/A")
+                sid = hit.get("sid", "FACEBOOK")
+                
+                _, _, flag = get_country_info(str(num))
+                
+                log_text = (
+                    f"🔔 <b>NEW CONSOLE LOG / OTP</b>\n\n"
+                    f"🌐 <b>Service:</b> {sid}\n"
+                    f"📱 <b>Number/Range:</b> {flag} <code>{num}</code>\n"
+                    f"💬 <b>Message:</b> <code>{msg}</code>"
+                )
+                
+                await application.bot.send_message(
+                    chat_id=OTP_GROUP_CHAT_ID,
+                    text=log_text,
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            print(f"Auto Forward Error: {e}")
+        
+        await asyncio.sleep(3) # Prottek 3 second por por console check korbe
 
 def create_number_markup(numbers_list):
     keyboard = []
@@ -286,8 +311,12 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == "set_binance":
         await query.message.reply_text("Please send your Binance Pay ID:")
 
+async def post_init(application):
+    # বট চালু হওয়ার সাথে সাথে অটো-ফরওয়ার্ড ব্যাকগ্রাউন্ড টাস্ক চালু হবে
+    asyncio.create_task(auto_forward_console_logs(application))
+
 if __name__ == '__main__':
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler('start', start))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
