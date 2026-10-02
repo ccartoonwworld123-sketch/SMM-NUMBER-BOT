@@ -86,17 +86,14 @@ def _sync_check_voltx_otp(target_phone, order_id):
     clean_target = ''.join(filter(str.isdigit, str(target_phone)))
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
-    # 1. Debugging er jonno console response print korbe
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
             res_json = res.json()
-            # Pura response terminal-e dekhaben jodi code na ase
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
             if isinstance(hits, list):
                 for hit in hits:
                     if not isinstance(hit, dict): continue
-                    # Sob possible keys check korbe
                     num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
                     msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", ""))
                     
@@ -111,7 +108,6 @@ def _sync_check_voltx_otp(target_phone, order_id):
     except Exception as e:
         print(f"Console Check Error: {e}")
 
-    # 2. Success-otp endpoint check
     try:
         res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
         if res.status_code == 200:
@@ -183,7 +179,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
     if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
-        USER_STATES[smm_otp_grup] = None
+        USER_STATES[user_id] = None
 
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
         clean_text = text.strip()
@@ -242,7 +238,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         balance_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw_binance")],
             [InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
-            [InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{smm_otp_grup}")]
+            [InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
         ])
         await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
 
