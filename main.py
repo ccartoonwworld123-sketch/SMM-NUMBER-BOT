@@ -98,29 +98,21 @@ def _sync_check_voltx_otp(target_phone, order_id, order_time):
                 for hit in hits:
                     if not isinstance(hit, dict): continue
                     num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
+                    clean_num = ''.join(filter(str.isdigit, num_raw))
+                    
+                    # STRICT CHECK: Shudhu matro exact oi number-tai match korte hobe
+                    if not clean_target or not clean_num or clean_target != clean_num:
+                        if not (clean_target.endswith(clean_num) or clean_num.endswith(clean_target)):
+                            continue
+                    
                     msg = str(hit.get("message", "") or hit.get("sms", "") or hit.get("text", "") or hit.get("content", "") or hit.get("body", "") or hit.get("otp", "")).strip()
                     
-                    # STRICT CHECK: যদি মেসেজ ফাকা থাকে বা pending/none হয় তবে সরাসরি বাদ দাও
                     if not msg or msg.lower() in ["none", "null", "pending", "", "false"]:
                         continue
                         
-                    # মেসেজের ভেতর সত্যিকারের OTP বা কোড আছে কি না তা যাচাই করার জন্য কন্ডিশন
-                    # শুধুমাত্র সংখ্যাসুলভ বা কোড সদৃশ টেক্সট থাকলে তবেই গ্রহণ করবে
-                    clean_msg_check = ''.join(filter(str.isdigit, msg))
-                    if len(clean_msg_check) < 4:  # যদি কোড ৪ ডিজিটের কম হয় তবে সেটি ভ্যালিড ওটিপি নয়
-                        continue
-
-                    clean_num = ''.join(filter(str.isdigit, num_raw))
-                    
-                    matched = False
-                    if clean_target and clean_num:
-                        if clean_target == clean_num or clean_target.endswith(clean_num) or clean_num.endswith(clean_target) or clean_target[-9:] in clean_num or clean_num[-9:] in clean_target:
-                            matched = True
-                            
-                    if matched:
-                        match = re.search(r'\b\d{4,8}\b', msg)
-                        if match:
-                            return match.group(0)
+                    match = re.search(r'\b\d{4,8}\b', msg)
+                    if match:
+                        return match.group(0)
     except Exception as e:
         print(f"Console Check Error: {e}")
     return None
@@ -158,12 +150,7 @@ async def auto_forward_console_logs(application):
                 msg = str(hit.get("message") or hit.get("sms") or hit.get("text") or hit.get("content", "")).strip()
                 sid = hit.get("sid", "FACEBOOK")
                 
-                # STRICT CHECK: ফাকা বা pending মেসেজ কখনোই প্রসেস বা ফরওয়ার্ড করা যাবে না
                 if not msg or msg.lower() in ["none", "null", "pending", "", "false"]:
-                    continue
-
-                clean_msg_check = ''.join(filter(str.isdigit, msg))
-                if len(clean_msg_check) < 4:
                     continue
 
                 unique_id = str(hit.get("id") or hit.get("time") or f"{num}_{msg}")
@@ -179,7 +166,7 @@ async def auto_forward_console_logs(application):
                 for active_phone, (user_chat_id, full_real_number, order_time) in list(ACTIVE_ORDERS.items()):
                     clean_active = ''.join(filter(str.isdigit, str(active_phone)))
                     if clean_active and clean_hit_num:
-                        if clean_active == clean_hit_num or clean_active.endswith(clean_hit_num) or clean_hit_num.endswith(clean_active) or clean_active[-9:] in clean_hit_num or clean_hit_num[-9:] in clean_active:
+                        if clean_active == clean_hit_num or clean_active.endswith(clean_hit_num) or clean_hit_num.endswith(clean_active):
                             match = re.search(r'\b\d{4,8}\b', msg)
                             if match:
                                 otp_code = match.group(0)
