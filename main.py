@@ -225,10 +225,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    text = update.message.text
-
-    if text in ["📞 Get API Number", "⚙ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
-        USER_STATES[user_id] = None
+    text = update.message.text or ""
 
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
         clean_text = text.strip()
@@ -240,7 +237,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
         return
 
-    if text == "📞 Get API Number":
+    if "Get API Number" in text:
+        USER_STATES[user_id] = None
         wait_msg = await update.message.reply_text("⏳ Fetching real number from panel, please wait...")
         user_range = USER_RANGES.get(user_id, "22896")
         numbers = []
@@ -270,11 +268,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for p, oid in orders:
             asyncio.create_task(poll_for_otp(update.effective_chat.id, oid, p, context))
 
-    elif text == "⚙ Set Range":
+    elif "Set Range" in text:
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
         await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
 
-    elif text == "🟢 Live Traffic":
+    elif "Live Traffic" in text:
+        USER_STATES[user_id] = None
         sorted_ranges, total_hits = await fetch_live_traffic_from_panel()
         traffic_lines = ["📊 <b>Live Traffic</b>\n", f"📋 <b>Total OTP:</b> {total_hits}", f"⏱ <b>Record:</b> Last 15 Minutes\n"]
         if sorted_ranges:
@@ -289,7 +288,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             traffic_lines.append("⚠️ No active ranges found right now.")
         await update.message.reply_text("\n".join(traffic_lines), parse_mode="HTML")
 
-    elif text == "💳 Balance":
+    elif "Balance" in text:
+        USER_STATES[user_id] = None
         balance_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw_binance")],
             [InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
@@ -297,7 +297,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ])
         await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
 
-    elif text == "📣 OTP Group":
+    elif "OTP Group" in text:
+        USER_STATES[user_id] = None
         group_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("📣 Join OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
         ])
