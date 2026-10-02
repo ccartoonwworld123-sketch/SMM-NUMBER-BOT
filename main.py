@@ -215,6 +215,8 @@ async def poll_for_otp(chat_id, order_id, phone, context):
             print(f"Polling Send Error: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    USER_STATES[user_id] = None
     reply_keyboard = [
         ["📞 Get API Number", "⚙ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
