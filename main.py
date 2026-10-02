@@ -87,7 +87,7 @@ async def fetch_live_traffic_from_panel():
 def _sync_check_voltx_otp(target_phone, order_id):
     headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
     clean_target = ''.join(filter(str.isdigit, str(target_phone)))
-    short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
+    short_target = clean_target[-8:] if len(clean_target) >= 8 else clean_target
     
     try:
         res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
@@ -102,7 +102,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
                     
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
-                    if short_target in clean_num or short_target in msg or (clean_target and clean_target in clean_num):
+                    if short_target in clean_num or clean_target in clean_num:
                         match = re.search(r'\b\d{4,8}\b', msg)
                         if match:
                             return match.group(0)
@@ -162,7 +162,7 @@ async def auto_forward_console_logs(application):
                     f"🎯 <b>Range :</b> <code>{num}</code>\n"
                     f"🗣 <b>Language :</b> English\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"✉️️ <b>Message :</b>\n"
+                    f"✉️ <b>Message :</b>\n"
                     f"<code>{msg}</code>"
                 )
                 
@@ -226,7 +226,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
+    if text in ["📞 Get API Number", "⚙️️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
         USER_STATES[user_id] = None
 
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
@@ -236,12 +236,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             USER_RANGES[user_id] = clean_text
             await update.message.reply_text(f"🔴 Target range updated to: <b>{clean_text}</b>", parse_mode="HTML")
         else:
-            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
+            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 23762).")
         return
 
     if text == "📞 Get API Number":
         wait_msg = await update.message.reply_text("⏳ Fetching real number from panel, please wait...")
-        user_range = USER_RANGES.get(user_id, "22896")
+        user_range = USER_RANGES.get(user_id, "23762")
         numbers = []
         orders = []
 
@@ -271,7 +271,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "⚙️ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
-        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896 or 2289657):")
+        await update.message.reply_text("🔴 Please send your target number range (e.g. 23762 or 23762XXX):")
 
     elif text == "🟢 Live Traffic":
         sorted_ranges, total_hits = await fetch_live_traffic_from_panel()
@@ -308,7 +308,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "change_number":
         user_id = query.from_user.id
-        user_range = USER_RANGES.get(user_id, "22896")
+        user_range = USER_RANGES.get(user_id, "23762")
         numbers = []
         orders = []
 
