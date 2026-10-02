@@ -155,7 +155,7 @@ async def auto_forward_console_logs(application):
                     f"🎯 <b>Range :</b> <code>{num}</code>\n"
                     f"🗣 <b>Language :</b> English\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"✉️️ <b>Message :</b>\n"
+                    f"✉ <b>Message :</b>\n"
                     f"<code>{msg}</code>"
                 )
                 
@@ -208,7 +208,7 @@ async def poll_for_otp(chat_id, order_id, phone, context):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
-        ["📞 Get API Number", "⚙️️ Set Range"],
+        ["📞 Get API Number", "⚙ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
         ["📣 OTP Group"]
     ]
@@ -219,7 +219,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if text in ["📞 Get API Number", "⚙️ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
+    if text in ["📞 Get API Number", "⚙ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
         USER_STATES[user_id] = None
 
     if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
@@ -262,7 +262,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for p, oid in orders:
             asyncio.create_task(poll_for_otp(update.effective_chat.id, oid, p, context))
 
-    elif text == "⚙️ Set Range":
+    elif text == "⚙ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
         await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
 
