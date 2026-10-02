@@ -9,7 +9,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 VOLTX_API_KEY = "MNFO9XZGN7E"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
-YOUR_TELEGRAM_USERNAME = "Smmnumberbot"
+YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
 OTP_GROUP_CHAT_ID = -1004436883235
 
 USER_STATES = {}
@@ -157,7 +157,7 @@ async def auto_forward_console_logs(application):
                 )
                 
                 markup = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("NUMBER BOT ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
+                    [InlineKeyboardButton("NUMBER BOT ↗", url="https://t.me/Smmnumberbot")]
                 ])
                 
                 await application.bot.send_message(
@@ -284,7 +284,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
 
     elif text == "📣 OTP Group":
-        await update.message.reply_text(f"📣 Join our OTP Group: t.me/{YOUR_TELEGRAM_USERNAME}")
+        await update.message.reply_text(f"📣 Join our OTP Group: https://t.me/{YOUR_TELEGRAM_USERNAME}")
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -341,3 +341,4 @@ if __name__ == '__main__':
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
     app.run_polling()
+
