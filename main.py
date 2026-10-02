@@ -89,7 +89,6 @@ def _sync_check_voltx_otp(target_phone, order_id):
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
     try:
-        # Docs অনুযায়ী success-otp এন্ডপয়েন্ট ব্যবহার করা হলো যা আপনার সফল ওটিপির তালিকা দেয়[span_9](start_span)[span_9](end_span)[span_10](start_span)[span_10](end_span)[span_11](start_span)[span_11](end_span)
         res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=3)
         if res.status_code == 200:
             res_json = res.json()
@@ -145,6 +144,12 @@ async def auto_forward_console_logs(application):
                 msg = otp_item.get("message", "N/A")
                 sid = "FACEBOOK"
                 
+                clean_num = str(num)
+                if len(clean_num) > 6:
+                    masked_num = clean_num[:6] + "X" * (len(clean_num) - 6)
+                else:
+                    masked_num = clean_num
+
                 country_name, country_code, flag = get_country_info(str(num))
                 
                 log_text = (
@@ -153,7 +158,7 @@ async def auto_forward_console_logs(application):
                     f"📘 <b>{sid} OTP RECEIVE</b>\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
                     f"{flag} <b>Country :</b> {country_code}\n"
-                    f"🎯 <b>Range :</b> <code>{num}</code>\n"
+                    f"🎯 <b>Range :</b> <code>{masked_num}</code>\n"
                     f"🗣 <b>Language :</b> English\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
                     f"✉ <b>Message :</b>\n"
