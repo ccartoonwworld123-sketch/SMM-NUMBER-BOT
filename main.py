@@ -104,11 +104,10 @@ def _sync_check_voltx_otp(target_phone, order_id, order_time):
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
                     matched = False
-                    if order_id and hit_id and str(order_id) == hit_id:
-                        matched = True
-                    elif clean_target and clean_num and (clean_target == clean_num or clean_target[-8:] == clean_num[-8:]):
-                        matched = True
-                        
+                    if clean_target and clean_num:
+                        if clean_target == clean_num or clean_target.endswith(clean_num) or clean_num.endswith(clean_target) or clean_target[-9:] in clean_num or clean_num[-9:] in clean_target:
+                            matched = True
+                            
                     if matched:
                         match = re.search(r'\b\d{4,8}\b', msg)
                         if match:
@@ -164,19 +163,20 @@ async def auto_forward_console_logs(application):
                 
                 for active_phone, (user_chat_id, full_real_number, order_time) in list(ACTIVE_ORDERS.items()):
                     clean_active = ''.join(filter(str.isdigit, str(active_phone)))
-                    if clean_active and clean_hit_num and (clean_active == clean_hit_num or clean_active[-8:] == clean_hit_num[-8:]):
-                        match = re.search(r'\b\d{4,8}\b', str(msg))
-                        otp_code = match.group(0) if match else msg
-                        
-                        target_send_number = full_real_number if len(str(full_real_number)) > 7 else num
-                        
-                        otp_message = f"✅ <b>OTP Received!</b>\n\n📱 <b>Number:</b> <code>{target_send_number}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
-                        try:
-                            await application.bot.send_message(chat_id=user_chat_id, text=otp_message, parse_mode="HTML")
-                        except Exception as send_err:
-                            print(f"Direct User Send Error: {send_err}")
-                        ACTIVE_ORDERS.pop(active_phone, None)
-                        break
+                    if clean_active and clean_hit_num:
+                        if clean_active == clean_hit_num or clean_active.endswith(clean_hit_num) or clean_hit_num.endswith(clean_active) or clean_active[-9:] in clean_hit_num or clean_hit_num[-9:] in clean_active:
+                            match = re.search(r'\b\d{4,8}\b', str(msg))
+                            otp_code = match.group(0) if match else msg
+                            
+                            target_send_number = full_real_number if len(str(full_real_number)) > 7 else num
+                            
+                            otp_message = f"✅ <b>OTP Received!</b>\n\n📱 <b>Number:</b> <code>{target_send_number}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
+                            try:
+                                await application.bot.send_message(chat_id=user_chat_id, text=otp_message, parse_mode="HTML")
+                            except Exception as send_err:
+                                print(f"Direct User Send Error: {send_err}")
+                            ACTIVE_ORDERS.pop(active_phone, None)
+                            break
 
                 country_name, country_code, flag = get_country_info(str(num))
                 
@@ -189,7 +189,7 @@ async def auto_forward_console_logs(application):
                     f"🎯 <b>Range :</b> <code>{num}</code>\n"
                     f"🗣 <b>Language :</b> English\n"
                     f"━━━━━━━━━━━━━━━━━━━\n"
-                    f"✉️ <b>Message :</b>\n"
+                    f"✉️️ <b>Message :</b>\n"
                     f"<code>{msg}</code>"
                 )
                 
@@ -258,19 +258,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text in ["📞 Get API Number", "⚙ Set Range", "🟢 Live Traffic", "💳 Balance", "📣 OTP Group"]:
         USER_STATES[user_id] = None
 
-    if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
+    if USER_STATES.get(user_id) == "WAITING_FROM_RANGE" or USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
         clean_text = text.strip()
         if "x" in clean_text.lower() or clean_text.isdigit():
             USER_STATES[user_id] = None
             USER_RANGES[user_id] = clean_text
             await update.message.reply_text(f"🔴 Target range updated to: <b>{clean_text}</b>", parse_mode="HTML")
         else:
-            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
+            await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 23762XXX).")
         return
 
     if text == "📞 Get API Number":
         wait_msg = await update.message.reply_text("⏳ Fetching real number from panel, please wait...")
-        user_range = USER_RANGES.get(user_id, "22896")
+        user_range = USER_RANGES.get(user_id, "23762")
         numbers = []
         orders = []
 
@@ -303,7 +303,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "⚙️ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
-        await update.message.reply_text("🔴 Please send your target number range (e.g. 22896):")
+        await update.message.reply_text("🔴 Please send your target number range (e.g. 23762XXX):")
 
     elif text == "🟢 Live Traffic":
         sorted_ranges, total_hits = await fetch_live_traffic_from_panel()
@@ -340,7 +340,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "change_number":
         user_id = query.from_user.id
-        user_range = USER_RANGES.get(user_id, "22896")
+        user_range = USER_RANGES.get(user_id, "23762")
         numbers = []
         orders = []
 
