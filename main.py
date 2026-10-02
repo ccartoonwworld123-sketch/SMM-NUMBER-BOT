@@ -119,20 +119,26 @@ async def auto_forward_console_logs(application):
     while True:
         try:
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
-            def fetch_success_otps():
+            def fetch_console_hits():
                 try:
-                    res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=5)
+                    res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=5)
                     if res.status_code == 200:
-                        return res.json().get("data", {}).get("otps", []) or []
+                        res_json = res.json()
+                        return res_json.get("data", {}).get("hits", []) or []
                 except Exception as ex:
                     print(f"Auto Forward Fetch Error: {ex}")
                 return []
 
-            otps = await asyncio.to_thread(fetch_success_otps)
-            for otp_item in otps:
-                if not isinstance(otp_item, dict): continue
+            hits = await asyncio.to_thread(fetch_console_hits)
+            for hit in hits:
+                if not isinstance(hit, dict): continue
                 
-                unique_id = str(otp_item.get("otp_id") or otp_item.get("time") or otp_item.get("number"))
+                r = hit.get("range", "")
+                sid = hit.get("sid", "FACEBOOK")
+                msg = hit.get("message", "N/A")
+                t_stamp = hit.get("time", "")
+                
+                unique_id = f"{r}_{t_stamp}_{msg}"
                 if unique_id in SEEN_OTP_IDS:
                     continue
                 
@@ -140,17 +146,13 @@ async def auto_forward_console_logs(application):
                 if len(SEEN_OTP_IDS) > 500:
                     SEEN_OTP_IDS.clear()
 
-                num = otp_item.get("number", "N/A")
-                msg = otp_item.get("message", "N/A")
-                sid = "FACEBOOK"
-                
-                clean_num = str(num)
+                clean_num = str(r)
                 if len(clean_num) > 6:
                     masked_num = clean_num[:6] + "X" * (len(clean_num) - 6)
                 else:
                     masked_num = clean_num
 
-                country_name, country_code, flag = get_country_info(str(num))
+                country_name, country_code, flag = get_country_info(str(r))
                 
                 log_text = (
                     f"<b>SMM NUMBER PANEL</b>                     <b>Admin</b>\n"
