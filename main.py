@@ -16,7 +16,7 @@ OTP_GROUP_CHAT_ID = -1004436883235
 USER_STATES = {}
 USER_RANGES = {}
 SEEN_OTP_IDS = set()
-ACTIVE_ORDERS = {}  # {clean_phone: (user_chat_id, full_real_number, order_time)}
+ACTIVE_ORDERS = {}  # {clean_phone: {"chat_id": id, "full_number": num, "order_time": timestamp}}
 
 def get_country_info(phone_number):
     clean_num = str(phone_number).replace("+", "").strip()
@@ -85,7 +85,7 @@ def _sync_fetch_live_traffic():
 async def fetch_live_traffic_from_panel():
     return await asyncio.to_thread(_sync_fetch_live_traffic)
 
-def _sync_check_voltx_otp(target_phone, order_id, order_time):
+def _sync_check_voltx_otp(target_phone, order_time):
     headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
     clean_target = ''.join(filter(str.isdigit, str(target_phone)))
     
@@ -98,19 +98,19 @@ def _sync_check_voltx_otp(target_phone, order_id, order_time):
                 for hit in hits:
                     if not isinstance(hit, dict): continue
                     
-                    # 20 minutes (1200 seconds) er beshi puraton hit ignore korbe
+                    # Strict Time Check: Order neyar somoyer ager ba 20 minutes (1200s) porer message ignore korbe
                     hit_time = hit.get("time") or hit.get("timestamp") or 0
                     try:
                         hit_time = float(hit_time)
-                        if hit_time > 1000000000 and hit_time < order_time:
-                            continue # Order neyar ager hit
+                        if hit_time > 1000000000:
+                            if hit_time < order_time or hit_time > (order_time + 1200):
+                                continue
                     except:
                         pass
 
                     num_raw = str(hit.get("number", "") or hit.get("phone", "") or hit.get("full_number", "") or hit.get("national_number", "") or hit.get("receiver", "") or hit.get("mobile", ""))
                     clean_num = ''.join(filter(str.isdigit, num_raw))
                     
-                    # Exact number match check
                     if not clean_target or not clean_num or clean_target != clean_num:
                         if not (clean_target.endswith(clean_num) or clean_num.endswith(clean_target)):
                             continue
@@ -127,8 +127,8 @@ def _sync_check_voltx_otp(target_phone, order_id, order_time):
         print(f"Console Check Error: {e}")
     return None
 
-async def check_voltx_otp(target_phone, order_id, order_time):
-    return await asyncio.to_thread(_sync_check_voltx_otp, target_phone, order_id, order_time)
+async def check_voltx_otp(target_phone, order_time):
+    return await asyncio.to_thread(_sync_check_voltx_otp, target_phone, order_time)
 
 async def auto_forward_console_logs(application):
     await asyncio.sleep(5)
@@ -136,9 +136,9 @@ async def auto_forward_console_logs(application):
         try:
             current_time_loop = time.time()
             
-            # Puraton active orders (20 minutes ba 1200 seconds par hoye geche) remove kore dibo
+            # Remove orders older than 20 minutes (1200 seconds)
             for ap, data in list(ACTIVE_ORDERS.items()):
-                if current_time_loop - data[2] > 1200:
+                if current_time_loop - data["order_time"] > 1200:
                     ACTIVE_ORDERS.pop(ap, None)
 
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
@@ -155,6 +155,12 @@ async def auto_forward_console_logs(application):
             for hit in hits:
                 if not isinstance(hit, dict): continue
                 
+                hit_time = hit.get("time") or hit.get("timestamp") or 0
+                try:
+                    hit_time = float(hit_time)
+                except:
+                    hit_time = 0
+
                 num = (
                     hit.get("full_number") or 
                     hit.get("national_number") or 
@@ -180,27 +186,40 @@ async def auto_forward_console_logs(application):
                 
                 clean_hit_num = ''.join(filter(str.isdigit, str(num)))
                 
-                # Check active orders with strict 20 minutes time window
-                for active_phone, (user_chat_id, full_real_number, order_time) in list(ACTIVE_ORDERS.items()):
-                    # Jodi 20 minutes (1200s) beshi hoye thake, skip
-                    if time.time() - order_time > 1200:
-                        continue
-                        
+                # Check active user orders with strict 20 minutes window matching
+                matched_user_sent = False
+                for active_phone, order_data in list(ACTIVE_ORDERS.items()):
+                    order_time = order_data["order_time"]
+                    
+                    # Jodi hit-er somoy order neyar ager hoy ba 20 minute periye jay, tahole ei order-er jonno na
+                    if hit_time > 1000000000:
+                        if hit_time < order_time or hit_time > (order_time + 1200):
+                            continue
+                    else:
+                        if current_time_loop - order_time > 1200:
+                            continue
+
                     clean_active = ''.join(filter(str.isdigit, str(active_phone)))
                     if clean_active and clean_hit_num:
                         if clean_active == clean_hit_num or clean_active.endswith(clean_hit_num) or clean_hit_num.endswith(clean_active):
                             match = re.search(r'\b\d{4,8}\b', msg)
                             if match:
                                 otp_code = match.group(0)
-                                target_send_number = full_real_number if len(str(full_real_number)) > 7 else num
+                                target_send_number = order_data["full_number"] if len(str(order_data["full_number"])) > 7 else num
                                 
                                 otp_message = f"✅ <b>OTP Received!</b>\n\n📱 <b>Number:</b> <code>{target_send_number}</code>\n🔑 <b>OTP Code:</b> <code>{otp_code}</code>"
                                 try:
-                                    await application.bot.send_message(chat_id=user_chat_id, text=otp_message, parse_mode="HTML")
+                                    await application.bot.send_message(chat_id=order_data["chat_id"], text=otp_message, parse_mode="HTML")
+                                    matched_user_sent = True
                                 except Exception as send_err:
                                     print(f"Direct User Send Error: {send_err}")
                                 ACTIVE_ORDERS.pop(active_phone, None)
                                 break
+
+                # OTP Group-e shudhu tokhoni pathabe jokon seta kono active user-er number-er sathe match korbe ebong 20 min-er moddhe ashbe!
+                if not matched_user_sent:
+                    # Jodi kono active user-er sathe match na kore, tahole eta puraton ba onno karoner hit, tai group-e o jabe na.
+                    continue
 
                 country_name, country_code, flag = get_country_info(str(num))
                 
@@ -248,17 +267,15 @@ def create_number_markup(numbers_list):
     keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="back_home")])
     return InlineKeyboardMarkup(keyboard)
 
-async def poll_for_otp(chat_id, order_id, phone, order_time, context):
-    # 20 minutes (1200 seconds) porjonto প্রতি সেকেন্ডে চেক করবে
+async def poll_for_otp(chat_id, phone, order_time, context):
     for _ in range(1200): 
         await asyncio.sleep(1) 
         
-        # Jodi 20 minutes periye jay, loop theke ber hoye jabe
         if time.time() - order_time > 1200:
             break
             
         try:
-            status = await check_voltx_otp(phone, order_id, order_time)
+            status = await check_voltx_otp(phone, order_time)
             if status:
                 otp_message = f"✅ <b>OTP Received!</b>\n\n📱 <b>Number:</b> <code>{phone}</code>\n🔑 <b>OTP Code:</b> <code>{status}</code>"
                 await context.bot.send_message(
@@ -308,7 +325,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             p, oid = await get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
-                if oid: orders.append((p, oid))
+                if oid: orders.append(p)
 
         try:
             await wait_msg.delete()
@@ -326,10 +343,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
         
         current_time = time.time()
-        for p, oid in orders:
+        for p in numbers:
             clean_p = ''.join(filter(str.isdigit, p))
-            ACTIVE_ORDERS[clean_p] = (update.effective_chat.id, p, current_time)
-            asyncio.create_task(poll_for_otp(update.effective_chat.id, oid, p, current_time, context))
+            ACTIVE_ORDERS[clean_p] = {
+                "chat_id": update.effective_chat.id,
+                "full_number": p,
+                "order_time": current_time
+            }
+            asyncio.create_task(poll_for_otp(update.effective_chat.id, p, current_time, context))
 
     elif text == "⚙️ Set Range":
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
@@ -372,13 +393,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = query.from_user.id
         user_range = USER_RANGES.get(user_id, "23762")
         numbers = []
-        orders = []
 
         for _ in range(2):
             p, oid = await get_voltx_real_number(target_range=user_range)
             if p and p not in numbers:
                 numbers.append(p)
-                if oid: orders.append((p, oid))
 
         if not numbers: return
 
@@ -390,10 +409,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception: pass
 
         current_time = time.time()
-        for p, oid in orders:
+        for p in numbers:
             clean_p = ''.join(filter(str.isdigit, p))
-            ACTIVE_ORDERS[clean_p] = (query.message.chat_id, p, current_time)
-            asyncio.create_task(poll_for_otp(query.message.chat_id, oid, p, current_time, context))
+            ACTIVE_ORDERS[clean_p] = {
+                "chat_id": query.message.chat_id,
+                "full_number": p,
+                "order_time": current_time
+            }
+            asyncio.create_task(poll_for_otp(query.message.chat_id, p, current_time, context))
 
     elif query.data == "back_home":
         try: await query.message.delete()
