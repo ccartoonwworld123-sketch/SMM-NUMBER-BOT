@@ -235,7 +235,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     support_text = (
         "💬 <b>সাপোর্ট সেন্টার</b>\n\n"
         "যেকোনো সমস্যা বা প্রশ্ন থাকলে নিচের বাটনে ক্লিক করে সরাসরি আমাদের সাপোর্ট টিমের সাথে যোগাযোগ করুন।\n\n"
-        "⏰ দ্রুত সাড়া দেওয়া হবে ইনশাআল্লাহ।"
+        "⏰ দ্রুত সাড়া দেওয়া হবে ইনশাআল্লাহ。"
     )
     support_markup = InlineKeyboardMarkup([
         [InlineKeyboardButton("📞 সাপোর্টে যোগাযোগ করুন", url=f"https://t.me/{SUPPORT_USERNAME}")]
@@ -347,12 +347,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    await query.answer()
+    await query.answer("🔄 Changing number...") # ইনস্ট্যান্ট এলার্ট মেসেজ যাতে চটজলদি রেসপন্স করে
     user_id = query.from_user.id
 
     if query.data == "change_number":
         user_range = USER_RANGES.get(user_id, "22896")
         
+        # প্যারালালি রিকোয়েস্ট পাঠিয়ে ইনস্ট্যান্ট ফাস্ট করা হয়েছে
         results = await asyncio.gather(
             get_voltx_real_number(target_range=user_range),
             get_voltx_real_number(target_range=user_range)
@@ -365,14 +366,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 numbers.append(p)
                 if oid: orders.append((p, oid))
 
-        if not numbers: return
+        if not numbers: 
+            return
 
         country_name, _, flag = get_country_info(numbers[0])
         header_text = f"✅ <b>Number:</b> {flag} {country_name}"
         reply_markup = create_number_markup(numbers)
         try:
             await query.edit_message_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
-        except Exception: pass
+        except Exception: 
+            pass
 
         for p, oid in orders:
             asyncio.create_task(poll_for_otp(query.message.chat_id, user_id, oid, p, context))
