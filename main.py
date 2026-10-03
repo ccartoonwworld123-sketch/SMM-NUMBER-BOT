@@ -10,12 +10,13 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 VOLTX_API_KEY = "MNFO9XZGN7E"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
 YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
+SUPPORT_USERNAME = "smmsaport"  # Apnar Support ID
 OTP_GROUP_CHAT_ID = -1004436883235
 
 USER_STATES = {}
 USER_RANGES = {}
-USER_BALANCES = {}  # User-er balance track korar jonno
-USER_WITHDRAW_INFO = {} # User-er bkash ba binance details save rakhar jonno
+USER_BALANCES = {}  
+USER_WITHDRAW_INFO = {} 
 SEEN_OTP_IDS = set()
 
 def get_country_info(phone_number):
@@ -206,7 +207,6 @@ async def poll_for_otp(chat_id, user_id, order_id, phone, context):
         try:
             status = await check_voltx_otp(phone, order_id)
             if status:
-                # Proti OTP-er jonno $0.00122 add kora hochche
                 current_bal = USER_BALANCES.get(user_id, 0.0)
                 USER_BALANCES[user_id] = current_bal + 0.00122
 
@@ -226,10 +226,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
         ["📞 Get API Number", "⚙ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
-        ["📣 OTP Group"]
+        ["💬 Support", "📣 OTP Group"]
     ]
     markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     await update.message.reply_text("Welcome to FB MASTER NUMBER bot! 🤖\nPlease select an option from the menu below:", reply_markup=markup)
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    support_text = (
+        "💬 <b>সাপোর্ট সেন্টার</b>\n\n"
+        "যেকোনো সমস্যা বা প্রশ্ন থাকলে নিচের বাটনে ক্লিক করে সরাসরি আমাদের সাপোর্ট টিমের সাথে যোগাযোগ করুন।\n\n"
+        "⏰ দ্রুত সাড়া দেওয়া হবে ইনশাআল্লাহ।"
+    )
+    support_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📞 সাপોર્টে যোগাযোগ করুন", url=f"https://t.me/{SUPPORT_USERNAME}")]
+    ])
+    await update.message.reply_text(support_text, reply_markup=support_markup, parse_mode="HTML")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -315,9 +326,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         balance_markup = InlineKeyboardMarkup([
             [InlineKeyboardButton("💸 Withdraw (bKash/Binance)", callback_data="withdraw_menu")],
             [InlineKeyboardButton("📱 Set bKash Number", callback_data="set_bkash"), InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
-            [InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
+            [InlineKeyboardButton("💬 Support", url=f"https://t.me/{SUPPORT_USERNAME}")]
         ])
         await update.message.reply_text(f"💳 <b>Your Balance:</b> ${user_bal:.5f}\n📂 <b>Payout Info:</b> {saved_info}\n\n📌 <i>Minimum withdraw is $1.00</i>", reply_markup=balance_markup, parse_mode="HTML")
+
+    elif "Support" in text:
+        USER_STATES[user_id] = None
+        await help_command(update, context)
 
     elif "OTP Group" in text:
         USER_STATES[user_id] = None
@@ -377,7 +392,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.message.reply_text("⚠️ Please set your bKash number or Binance ID first using the buttons in the Balance menu.")
             else:
                 await query.message.reply_text(f"✅ <b>Withdraw Request Successful!</b>\n\nYour request for ${user_bal:.5f} to <b>{saved_info}</b> has been submitted to admin.")
-                USER_BALANCES[user_id] = 0.0 # Balance reset after request
+                USER_BALANCES[user_id] = 0.0 
 
 async def post_init(application):
     asyncio.create_task(auto_forward_console_logs(application))
@@ -385,6 +400,7 @@ async def post_init(application):
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler('start', start))
+    app.add_handler(CommandHandler('help', help_command)) # /help command er jonno
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
