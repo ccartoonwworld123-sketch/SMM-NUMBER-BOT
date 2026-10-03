@@ -42,8 +42,7 @@ def _sync_get_voltx_real_number(target_range):
     clean_rid = str(target_range).upper().replace("XXX", "").replace("X", "").strip()
     payload = {"rid": clean_rid}
     try:
-        # Timeout 2 second kora holo jate fast response pay
-        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=2)
+        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=1.5)
         if res.status_code == 200:
             res_data = res.json()
             data = res_data.get("data", {})
@@ -63,7 +62,7 @@ def _sync_fetch_live_traffic():
     range_counts = {}
     total_hits = 0
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
             res_json = res.json()
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
@@ -93,7 +92,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
     try:
-        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
+        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=1.5)
         if res.status_code == 200:
             res_json = res.json()
             otps = res_json.get("data", {}).get("otps", []) or []
@@ -125,7 +124,7 @@ async def auto_forward_console_logs(application):
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
             def fetch_console_hits():
                 try:
-                    res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
+                    res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
                     if res.status_code == 200:
                         res_json = res.json()
                         return res_json.get("data", {}).get("hits", []) or []
@@ -273,7 +272,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wait_msg = await update.message.reply_text("⏳ Fetching real number from panel, please wait...")
         user_range = USER_RANGES.get(user_id, "22896")
         
-        # Ek sathe 2 ta number fast fetch korar jonno asyncio.gather use kora holo
+        # Ek sathe 2 ta number fast fetch korar jonno asyncio.gather
         results = await asyncio.gather(
             get_voltx_real_number(target_range=user_range),
             get_voltx_real_number(target_range=user_range)
