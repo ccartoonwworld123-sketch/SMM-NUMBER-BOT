@@ -10,10 +10,13 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 VOLTX_API_KEY = "MNFO9XZGN7E"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
 YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
+SUPPORT_USERNAME = "smmsaport"
 OTP_GROUP_CHAT_ID = -1004436883235
 
 USER_STATES = {}
 USER_RANGES = {}
+USER_BALANCES = {}  
+USER_WITHDRAW_INFO = {} 
 SEEN_OTP_IDS = set()
 
 def get_country_info(phone_number):
@@ -39,7 +42,7 @@ def _sync_get_voltx_real_number(target_range):
     clean_rid = str(target_range).upper().replace("XXX", "").replace("X", "").strip()
     payload = {"rid": clean_rid}
     try:
-        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=5)
+        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=1.5)
         if res.status_code == 200:
             res_data = res.json()
             data = res_data.get("data", {})
@@ -59,7 +62,7 @@ def _sync_fetch_live_traffic():
     range_counts = {}
     total_hits = 0
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=5)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
         if res.status_code == 200:
             res_json = res.json()
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
@@ -89,7 +92,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
     try:
-        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=3)
+        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=1.5)
         if res.status_code == 200:
             res_json = res.json()
             otps = res_json.get("data", {}).get("otps", []) or []
@@ -121,7 +124,7 @@ async def auto_forward_console_logs(application):
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
             def fetch_console_hits():
                 try:
-                    res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=5)
+                    res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=2)
                     if res.status_code == 200:
                         res_json = res.json()
                         return res_json.get("data", {}).get("hits", []) or []
@@ -183,7 +186,7 @@ async def auto_forward_console_logs(application):
         except Exception as e:
             print(f"Auto Forward Error: {e}")
         
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
 
 def create_number_markup(numbers_list):
     keyboard = []
@@ -198,13 +201,16 @@ def create_number_markup(numbers_list):
     keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="back_home")])
     return InlineKeyboardMarkup(keyboard)
 
-async def poll_for_otp(chat_id, order_id, phone, context):
+async def poll_for_otp(chat_id, user_id, order_id, phone, context):
     for _ in range(300): 
         await asyncio.sleep(1) 
         try:
             status = await check_voltx_otp(phone, order_id)
             if status:
-                otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{phone}</code>\n🔑 <b>OTP Code:</b> <code>{status}</code>"
+                current_bal = USER_BALANCES.get(user_id, 0.0)
+                USER_BALANCES[user_id] = current_bal + 0.00122
+
+                otp_message = f"🚨 <b>NEW OTP RECEIVED!</b> 🚨\n\n📱 <b>Number:</b> <code>{phone}</code>\n🔑 <b>OTP Code:</b> <code>{status}</code>\n💰 <b>Earned:</b> +$0.00122"
                 await context.bot.send_message(
                     chat_id=chat_id, 
                     text=otp_message, 
@@ -220,16 +226,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_keyboard = [
         ["📞 Get API Number", "⚙ Set Range"],
         ["🟢 Live Traffic", "💳 Balance"],
-        ["📣 OTP Group"]
+        ["💬 Support", "📣 OTP Group"]
     ]
     markup = ReplyKeyboardMarkup(reply_keyboard, resize_keyboard=True)
     await update.message.reply_text("Welcome to FB MASTER NUMBER bot! 🤖\nPlease select an option from the menu below:", reply_markup=markup)
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    support_text = (
+        "💬 <b>সাপোর্ট সেন্টার</b>\n\n"
+        "যেকোনো সমস্যা বা প্রশ্ন থাকলে নিচের বাটনে ক্লিক করে সরাসরি আমাদের সাপোর্ট টিমের সাথে যোগাযোগ করুন।\n\n"
+        "⏰ দ্রুত সাড়া দেওয়া হবে ইনশাআল্লাহ।"
+    )
+    support_markup = InlineKeyboardMarkup([
+        [InlineKeyboardButton("📞 সাপোর্টে যোগাযোগ করুন", url=f"https://t.me/{SUPPORT_USERNAME}")]
+    ])
+    await update.message.reply_text(support_text, reply_markup=support_markup, parse_mode="HTML")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text or ""
 
-    if USER_STATES.get(user_id) == "WAITING_FOR_RANGE":
+    state = USER_STATES.get(user_id)
+    if state == "WAITING_FOR_RANGE":
         clean_text = text.strip()
         if "x" in clean_text.lower() or clean_text.isdigit():
             USER_STATES[user_id] = None
@@ -238,16 +256,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("🔴 Invalid range! Please enter a valid number prefix (e.g. 22896).")
         return
+    elif state == "WAITING_FOR_BKASH":
+        USER_STATES[user_id] = None
+        USER_WITHDRAW_INFO[user_id] = f"bKash: {text.strip()}"
+        await update.message.reply_text(f"✅ bKash number saved successfully: <code>{text.strip()}</code>", parse_mode="HTML")
+        return
+    elif state == "WAITING_FOR_BINANCE":
+        USER_STATES[user_id] = None
+        USER_WITHDRAW_INFO[user_id] = f"Binance ID: {text.strip()}"
+        await update.message.reply_text(f"✅ Binance ID saved successfully: <code>{text.strip()}</code>", parse_mode="HTML")
+        return
 
     if "Get API Number" in text:
         USER_STATES[user_id] = None
         wait_msg = await update.message.reply_text("⏳ Fetching real number from panel, please wait...")
         user_range = USER_RANGES.get(user_id, "22896")
+        
+        results = await asyncio.gather(
+            get_voltx_real_number(target_range=user_range),
+            get_voltx_real_number(target_range=user_range)
+        )
+        
         numbers = []
         orders = []
-
-        for _ in range(2):
-            p, oid = await get_voltx_real_number(target_range=user_range)
+        for p, oid in results:
             if p and p not in numbers:
                 numbers.append(p)
                 if oid: orders.append((p, oid))
@@ -268,7 +300,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(header_text, reply_markup=reply_markup, parse_mode="HTML")
         
         for p, oid in orders:
-            asyncio.create_task(poll_for_otp(update.effective_chat.id, oid, p, context))
+            asyncio.create_task(poll_for_otp(update.effective_chat.id, user_id, oid, p, context))
 
     elif "Set Range" in text:
         USER_STATES[user_id] = "WAITING_FOR_RANGE"
@@ -292,12 +324,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif "Balance" in text:
         USER_STATES[user_id] = None
+        user_bal = USER_BALANCES.get(user_id, 0.0)
+        saved_info = USER_WITHDRAW_INFO.get(user_id, "Not Set")
+        
         balance_markup = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💳 Withdraw via Binance", callback_data="withdraw_binance")],
-            [InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
-            [InlineKeyboardButton("📣 OTP Group ↗", url=f"https://t.me/{YOUR_TELEGRAM_USERNAME}")]
+            [InlineKeyboardButton("💸 Withdraw (bKash/Binance)", callback_data="withdraw_menu")],
+            [InlineKeyboardButton("📱 Set bKash Number", callback_data="set_bkash"), InlineKeyboardButton("🔴 Set Binance ID", callback_data="set_binance")],
+            [InlineKeyboardButton("💬 Support", url=f"https://t.me/{SUPPORT_USERNAME}")]
         ])
-        await update.message.reply_text("Current Balance: $0.091\nBinance Pay ID: Not Set\n\nMinimum withdraw is $0.2", reply_markup=balance_markup)
+        await update.message.reply_text(f"💳 <b>Your Balance:</b> ${user_bal:.5f}\n📂 <b>Payout Info:</b> {saved_info}\n\n📌 <i>Minimum withdraw is $1.00</i>", reply_markup=balance_markup, parse_mode="HTML")
+
+    elif "Support" in text:
+        USER_STATES[user_id] = None
+        await help_command(update, context)
 
     elif "OTP Group" in text:
         USER_STATES[user_id] = None
@@ -309,15 +348,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    user_id = query.from_user.id
 
     if query.data == "change_number":
-        user_id = query.from_user.id
         user_range = USER_RANGES.get(user_id, "22896")
+        
+        results = await asyncio.gather(
+            get_voltx_real_number(target_range=user_range),
+            get_voltx_real_number(target_range=user_range)
+        )
+        
         numbers = []
         orders = []
-
-        for _ in range(2):
-            p, oid = await get_voltx_real_number(target_range=user_range)
+        for p, oid in results:
             if p and p not in numbers:
                 numbers.append(p)
                 if oid: orders.append((p, oid))
@@ -332,14 +375,32 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception: pass
 
         for p, oid in orders:
-            asyncio.create_task(poll_for_otp(query.message.chat_id, oid, p, context))
+            asyncio.create_task(poll_for_otp(query.message.chat_id, user_id, oid, p, context))
 
     elif query.data == "back_home":
         try: await query.message.delete()
         except Exception: pass
         await start(update, context)
+        
+    elif query.data == "set_bkash":
+        USER_STATES[user_id] = "WAITING_FOR_BKASH"
+        await query.message.reply_text("📲 Please send your bKash personal/agent number:")
+        
     elif query.data == "set_binance":
-        await query.message.reply_text("Please send your Binance Pay ID:")
+        USER_STATES[user_id] = "WAITING_FOR_BINANCE"
+        await query.message.reply_text("🔴 Please send your Binance Pay ID:")
+        
+    elif query.data == "withdraw_menu":
+        user_bal = USER_BALANCES.get(user_id, 0.0)
+        if user_bal < 1.0:
+            await query.message.reply_text(f"❌ <b>Insufficient Balance!</b>\n\nYour balance is ${user_bal:.5f}. Minimum withdraw limit is <b>$1.00</b>.", parse_mode="HTML")
+        else:
+            saved_info = USER_WITHDRAW_INFO.get(user_id)
+            if not saved_info:
+                await query.message.reply_text("⚠️ Please set your bKash number or Binance ID first using the buttons in the Balance menu.")
+            else:
+                await query.message.reply_text(f"✅ <b>Withdraw Request Successful!</b>\n\nYour request for ${user_bal:.5f} to <b>{saved_info}</b> has been submitted to admin.")
+                USER_BALANCES[user_id] = 0.0 
 
 async def post_init(application):
     asyncio.create_task(auto_forward_console_logs(application))
@@ -347,6 +408,7 @@ async def post_init(application):
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler('start', start))
+    app.add_handler(CommandHandler('help', help_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
