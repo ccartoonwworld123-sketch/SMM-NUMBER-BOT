@@ -10,7 +10,7 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN")
 VOLTX_API_KEY = "MNFO9XZGN7E"
 BASE_API_URL = "https://api.2oo9.cloud/MXS47FLFX0U/tnevs/@public/api"
 YOUR_TELEGRAM_USERNAME = "smm_otp_grup"
-SUPPORT_USERNAME = "smmsaport"  # Apnar Support ID
+SUPPORT_USERNAME = "smmsaport"
 OTP_GROUP_CHAT_ID = -1004436883235
 
 USER_STATES = {}
@@ -42,7 +42,8 @@ def _sync_get_voltx_real_number(target_range):
     clean_rid = str(target_range).upper().replace("XXX", "").replace("X", "").strip()
     payload = {"rid": clean_rid}
     try:
-        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=5)
+        # Timeout 2 second kora holo jate fast response pay
+        res = requests.post(f"{BASE_API_URL}/getnum", headers=headers, json=payload, timeout=2)
         if res.status_code == 200:
             res_data = res.json()
             data = res_data.get("data", {})
@@ -62,7 +63,7 @@ def _sync_fetch_live_traffic():
     range_counts = {}
     total_hits = 0
     try:
-        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=5)
+        res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
         if res.status_code == 200:
             res_json = res.json()
             hits = res_json.get("data", {}).get("hits", []) or res_json.get("data", []) or res_json.get("hits", [])
@@ -92,7 +93,7 @@ def _sync_check_voltx_otp(target_phone, order_id):
     short_target = clean_target[-6:] if len(clean_target) >= 6 else clean_target
     
     try:
-        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=3)
+        res = requests.get(f"{BASE_API_URL}/success-otp", headers=headers, timeout=2)
         if res.status_code == 200:
             res_json = res.json()
             otps = res_json.get("data", {}).get("otps", []) or []
@@ -124,7 +125,7 @@ async def auto_forward_console_logs(application):
             headers = {"mauthapi": VOLTX_API_KEY, "Accept": "application/json"}
             def fetch_console_hits():
                 try:
-                    res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=5)
+                    res = requests.get(f"{BASE_API_URL}/console", headers=headers, timeout=3)
                     if res.status_code == 200:
                         res_json = res.json()
                         return res_json.get("data", {}).get("hits", []) or []
@@ -186,7 +187,7 @@ async def auto_forward_console_logs(application):
         except Exception as e:
             print(f"Auto Forward Error: {e}")
         
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
 
 def create_number_markup(numbers_list):
     keyboard = []
@@ -271,11 +272,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         USER_STATES[user_id] = None
         wait_msg = await update.message.reply_text("⏳ Fetching real number from panel, please wait...")
         user_range = USER_RANGES.get(user_id, "22896")
+        
+        # Ek sathe 2 ta number fast fetch korar jonno asyncio.gather use kora holo
+        results = await asyncio.gather(
+            get_voltx_real_number(target_range=user_range),
+            get_voltx_real_number(target_range=user_range)
+        )
+        
         numbers = []
         orders = []
-
-        for _ in range(2):
-            p, oid = await get_voltx_real_number(target_range=user_range)
+        for p, oid in results:
             if p and p not in numbers:
                 numbers.append(p)
                 if oid: orders.append((p, oid))
@@ -348,11 +354,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if query.data == "change_number":
         user_range = USER_RANGES.get(user_id, "22896")
+        
+        results = await asyncio.gather(
+            get_voltx_real_number(target_range=user_range),
+            get_voltx_real_number(target_range=user_range)
+        )
+        
         numbers = []
         orders = []
-
-        for _ in range(2):
-            p, oid = await get_voltx_real_number(target_range=user_range)
+        for p, oid in results:
             if p and p not in numbers:
                 numbers.append(p)
                 if oid: orders.append((p, oid))
@@ -400,7 +410,7 @@ async def post_init(application):
 if __name__ == '__main__':
     app = ApplicationBuilder().token(BOT_TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler('start', start))
-    app.add_handler(CommandHandler('help', help_command)) # /help command er jonno
+    app.add_handler(CommandHandler('help', help_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(CallbackQueryHandler(handle_callback))
 
