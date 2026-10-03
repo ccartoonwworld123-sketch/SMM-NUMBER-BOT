@@ -238,7 +238,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⏰ দ্রুত সাড়া দেওয়া হবে ইনশাআল্লাহ।"
     )
     support_markup = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📞 সাপોર્টে যোগাযোগ করুন", url=f"https://t.me/{SUPPORT_USERNAME}")]
+        [InlineKeyboardButton("📞 সাপোর্টে যোগাযোগ করুন", url=f"https://t.me/{SUPPORT_USERNAME}")]
     ])
     await update.message.reply_text(support_text, reply_markup=support_markup, parse_mode="HTML")
 
