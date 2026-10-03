@@ -272,7 +272,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         wait_msg = await update.message.reply_text("⏳ Fetching real number from panel, please wait...")
         user_range = USER_RANGES.get(user_id, "22896")
         
-        # Ek sathe 2 ta number fast fetch korar jonno asyncio.gather
         results = await asyncio.gather(
             get_voltx_real_number(target_range=user_range),
             get_voltx_real_number(target_range=user_range)
